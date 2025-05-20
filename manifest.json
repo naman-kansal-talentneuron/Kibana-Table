@@ -1,9 +1,16 @@
 {
   "manifest_version": 3,
   "name": "Kibana Table Exporter",
-  "description": "Export Kibana JSON data to a table format",
-  "version": "1.0",
-  "permissions": ["activeTab", "scripting", "storage"],
+  "version": "1.0.0",
+  "description": "Extract and view Kibana data in a table format with sorting, filtering and export options",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://*/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
@@ -17,13 +24,18 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://*.kibana.com/*", "*://*/*"],
+      "matches": ["<all_urls>"],
       "js": ["content.js"]
     }
   ],
+  "icons": {
+    "16": "images/icon16.png",
+    "48": "images/icon48.png",
+    "128": "images/icon128.png"
+  },
   "web_accessible_resources": [
     {
-      "resources": ["table.html"],
+      "resources": ["table.html", "table.js"],
       "matches": ["<all_urls>"]
     }
   ]

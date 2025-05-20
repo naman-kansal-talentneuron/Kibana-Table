@@ -2,48 +2,152 @@
 <html>
 <head>
   <title>Kibana Table Exporter</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.0/font/bootstrap-icons.css" rel="stylesheet">
   <style>
     body {
-      width: 300px;
+      width: 360px;
+      min-height: 250px;
+      padding: 15px;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    
+    .header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #dee2e6;
+      padding-bottom: 10px;
+    }
+    
+    .logo {
+      width: 32px;
+      height: 32px;
+      margin-right: 10px;
+    }
+    
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+      padding: 8px 10px;
+      border-radius: 4px;
+      background-color: #f8f9fa;
+      font-size: 0.875rem;
+    }
+    
+    .status-icon {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+    
+    .status-active {
+      background-color: #28a745;
+    }
+    
+    .status-inactive {
+      background-color: #dc3545; 
+    }
+    
+    .status-pending {
+      background-color: #ffc107;
+    }
+    
+    .action-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .preview-container {
+      margin-top: 15px;
+      max-height: 150px;
+      overflow-y: auto;
+      background-color: #f8f9fa;
+      border-radius: 4px;
       padding: 10px;
-      font-family: Arial, sans-serif;
+      font-size: 0.8rem;
+      font-family: monospace;
     }
-    button {
-      margin: 5px 0;
-      padding: 8px;
-      width: 100%;
-      background-color: #0078d7;
-      color: white;
-      border: none;
+    
+    .extraction-time {
+      font-size: 0.75rem;
+      text-align: center;
+      margin-top: 8px;
+      color: #6c757d;
+    }
+    
+    .notification {
+      padding: 8px 12px;
+      margin-top: 15px;
       border-radius: 4px;
-      cursor: pointer;
+      font-size: 0.875rem;
     }
-    button:hover {
-      background-color: #0063b1;
+    
+    .spinner-border {
+      width: 1rem;
+      height: 1rem;
+      border-width: 0.15rem;
+      margin-right: 8px;
     }
-    #status {
-      margin-top: 10px;
-      padding: 8px;
-      border-radius: 4px;
-      font-size: 14px;
+    
+    .btn-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    .success {
-      background-color: #dff0d8;
-      color: #3c763d;
-    }
-    .error {
-      background-color: #f2dede;
-      color: #a94442;
+    
+    .btn-icon svg {
+      margin-right: 8px;
     }
   </style>
 </head>
 <body>
-  <h2>Kibana Table Exporter</h2>
-  <button id="extractButton">Extract JSON Data</button>
-  <button id="previewButton" disabled>Preview as Table</button>
-  <button id="exportCSVButton" disabled>Export to CSV</button>
-  <button id="exportExcelButton" disabled>Export to Excel</button>
-  <div id="status"></div>
+  <div class="header">
+    <img src="icon-48.png" alt="Kibana Table" class="logo">
+    <h5 class="mb-0">Kibana Table Exporter</h5>
+  </div>
+  
+  <div id="statusIndicator" class="status-indicator">
+    <span class="status-icon" id="statusDot"></span>
+    <span id="statusText">Checking Kibana page...</span>
+  </div>
+  
+  <div class="action-buttons">
+    <button id="extractButton" class="btn btn-primary btn-icon" disabled>
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+        <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+        <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+      </svg>
+      Extract Data from Kibana
+    </button>
+    
+    <button id="viewTableButton" class="btn btn-success btn-icon" disabled>
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+        <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm15 2h-4v3h4V4zm0 4h-4v3h4V8zm0 4h-4v3h3a1 1 0 0 0 1-1v-2zm-5 3v-3H6v3h4zm-5 0v-3H1v2a1 1 0 0 0 1 1h3zm-4-4h4V8H1v3zm0-4h4V4H1v3zm5-3v3h4V4H6zm4 4H6v3h4V8z"/>
+      </svg>
+      View as Table
+    </button>
+    
+    <button id="clearButton" class="btn btn-outline-secondary btn-icon" disabled>
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+        <path d="M2.5 1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1H3v9a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V4h.5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H10a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1H2.5zm3 4a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 .5-.5zM8 5a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7A.5.5 0 0 1 8 5zm3 .5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 1 0z"/>
+      </svg>
+      Clear Data
+    </button>
+  </div>
+  
+  <div id="dataPreview" class="preview-container" style="display:none;">
+    <pre id="jsonPreview"></pre>
+    <div id="extractionTime" class="extraction-time"></div>
+  </div>
+  
+  <div id="notifications">
+    <!-- Notifications will appear here -->
+  </div>
+  
   <script src="popup.js"></script>
 </body>
 </html>

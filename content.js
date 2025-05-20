@@ -47,13 +47,19 @@ function extractKibanaData() {
         for (const element of elements) {
           try {
             const text = element.textContent;
-            if (text && text.trim().startsWith('{') && text.trim().endsWith('}')) {
+            // if (text && text.trim().startsWith('{') && text.trim().endsWith('}')) { // OLD
+            if (text) { // NEW: Check if text exists
               try {
-                const jsonData = JSON.parse(text);
-                console.log(`Found JSON in selector: ${selector}`, jsonData);
-                return resolve(jsonData);
+                // const jsonData = JSON.parse(text); // OLD
+                const jsonString = extractJsonString(text); // NEW: Use extractJsonString
+                if (jsonString) {                         // NEW: Check if jsonString was extracted
+                    const jsonData = JSON.parse(jsonString);
+                    console.log(`Found JSON in selector: ${selector}`, jsonData);
+                    return resolve(jsonData);
+                }
               } catch (parseError) {
-                console.log(`Found text in ${selector} but failed to parse as JSON`);
+                // console.log(`Found text in ${selector} but failed to parse as JSON`); // OLD
+                console.log(`Text in ${selector} was not valid JSON after extraction:`, parseError); // NEW: Improved logging
               }
             }
           } catch (e) {
@@ -83,74 +89,136 @@ function extractKibanaData() {
     }
 
     // Try to find in Monaco editor (Kibana console)
-    const editorElements = document.querySelectorAll('.monaco-editor');
-    if (editorElements.length > 0) {
-      // Find the right editor panel (output panel typically comes after input panel)
-      const panels = document.querySelectorAll('.monaco-editor-container');
-      let rightPanel;
-      
-      if (panels.length >= 2) {
-        rightPanel = panels[1]; // Usually the second panel is the output
-      } else if (panels.length === 1) {
-        rightPanel = panels[0];
-      }
-      
-      if (rightPanel) {
-        // Try to find the text content in multiple ways
-        
-        // Method 1: Use view-line elements
-        const lines = Array.from(rightPanel.querySelectorAll('.view-line'))
-          .map(line => line.textContent.trim())
-          .join('');
-        
-        try {
-          const jsonString = extractJsonString(lines);
-          if (jsonString) {
-            const jsonData = JSON.parse(jsonString);
-            console.log('Found JSON in Monaco editor view-lines', jsonData);
-            return resolve(jsonData);
-          }
-        } catch (e) {
-          console.log("Error parsing JSON from view-lines:", e);
+    // OLD MONACO LOGIC WILL BE REPLACED
+    // const editorElements = document.querySelectorAll('.monaco-editor');
+    // if (editorElements.length > 0) {
+    //   // Find the right editor panel (output panel typically comes after input panel)
+    //   const panels = document.querySelectorAll('.monaco-editor-container');
+    //   let rightPanel;
+    //   
+    //   if (panels.length >= 2) {
+    //     rightPanel = panels[1]; // Usually the second panel is the output
+    //   } else if (panels.length === 1) {
+    //     rightPanel = panels[0];
+    //   }
+    //   
+    //   if (rightPanel) {
+    //     // Method 1: Use view-line elements
+    //     const lines = Array.from(rightPanel.querySelectorAll('.view-line'))
+    //       .map(line => line.textContent.trim())
+    //       .join('');
+    //     
+    //     try {
+    //       const jsonString = extractJsonString(lines);
+    //       if (jsonString) {
+    //         const jsonData = JSON.parse(jsonString);
+    //         console.log('Found JSON in Monaco editor view-lines', jsonData);
+    //         return resolve(jsonData);
+    //       }
+    //     } catch (e) {
+    //       console.log("Error parsing JSON from view-lines:", e);
+    //     }
+    //     
+    //     // Method 2: Use monaco-editor content div
+    //     const contentDiv = rightPanel.querySelector('.monaco-editor-background + div');
+    //     if (contentDiv) {
+    //       try {
+    //         const contentText = contentDiv.textContent;
+    //         if (contentText && contentText.includes('{') && contentText.includes('}')) {
+    //           const jsonString = extractJsonString(contentText);
+    //           if (jsonString) {
+    //             const jsonData = JSON.parse(jsonString);
+    //             console.log('Found JSON in Monaco editor content div', jsonData);
+    //             return resolve(jsonData);
+    //           }
+    //         }
+    //       } catch (e) {
+    //         console.log("Error parsing JSON from content div:", e);
+    //       }
+    //     }
+    //     
+    //     // Method 3: Look for .lines-content element which might contain the editor text
+    //     const linesContent = rightPanel.querySelector('.lines-content');
+    //     if (linesContent) {
+    //       try {
+    //         const linesText = linesContent.textContent;
+    //         if (linesText && linesText.includes('{') && linesText.includes('}')) {
+    //           const jsonString = extractJsonString(linesText);
+    //           if (jsonString) {
+    //             const jsonData = JSON.parse(jsonString);
+    //             console.log('Found JSON in Monaco editor lines-content', jsonData);
+    //             return resolve(jsonData);
+    //           }
+    //         }
+    //       } catch (e) {
+    //         console.log("Error parsing JSON from lines-content:", e);
+    //       }
+    //     }
+    //   }
+    // }
+
+    // NEW MONACO EDITOR LOGIC
+    const allMonacoEditors = document.querySelectorAll('.monaco-editor');
+    if (allMonacoEditors.length > 0) {
+        const editorsToTry = [];
+        if (allMonacoEditors.length >= 2) {
+            // Prioritize the second editor (often the output pane in Kibana console)
+            editorsToTry.push(allMonacoEditors[1]); 
+            // Also consider the last editor as a potential output pane
+            editorsToTry.push(allMonacoEditors[allMonacoEditors.length - 1]);
         }
-        
-        // Method 2: Use monaco-editor content div
-        const contentDiv = rightPanel.querySelector('.monaco-editor-background + div');
-        if (contentDiv) {
-          try {
-            const contentText = contentDiv.textContent;
-            if (contentText && contentText.includes('{') && contentText.includes('}')) {
-              const jsonString = extractJsonString(contentText);
-              if (jsonString) {
-                const jsonData = JSON.parse(jsonString);
-                console.log('Found JSON in Monaco editor content div', jsonData);
-                return resolve(jsonData);
-              }
+        // Always include the first editor, especially if it's the only one
+        if (allMonacoEditors.length > 0) {
+             editorsToTry.push(allMonacoEditors[0]);
+        }
+
+        // Deduplicate in case the second/last/first editor is the same
+        const uniqueEditorsToTry = [...new Set(editorsToTry)]; 
+
+        for (const editorNode of uniqueEditorsToTry) {
+            let textContent = '';
+            
+            // Try to get content from .view-line elements (most reliable for structure)
+            const viewLines = editorNode.querySelectorAll('.view-line');
+            if (viewLines.length > 0) {
+                textContent = Array.from(viewLines)
+                                  .map(line => line.textContent) // Preserve original spacing within lines
+                                  .join('\\n'); // Join lines with newline, crucial for parsing
             }
-          } catch (e) {
-            console.log("Error parsing JSON from content div:", e);
-          }
-        }
-        
-        // Method 3: Look for .lines-content element which might contain the editor text
-        const linesContent = rightPanel.querySelector('.lines-content');
-        if (linesContent) {
-          try {
-            const linesText = linesContent.textContent;
-            if (linesText && linesText.includes('{') && linesText.includes('}')) {
-              const jsonString = extractJsonString(linesText);
-              if (jsonString) {
-                const jsonData = JSON.parse(jsonString);
-                console.log('Found JSON in Monaco editor lines-content', jsonData);
-                return resolve(jsonData);
-              }
+
+            // Fallback: try .lines-content
+            if (!textContent || textContent.trim() === '') {
+                const linesContentElement = editorNode.querySelector('.lines-content');
+                if (linesContentElement) {
+                    textContent = linesContentElement.textContent;
+                }
             }
-          } catch (e) {
-            console.log("Error parsing JSON from lines-content:", e);
-          }
+
+            // Further Fallback: direct textContent of the editor node
+            if (!textContent || textContent.trim() === '') {
+                 textContent = editorNode.textContent;
+            }
+
+            if (textContent) {
+                try {
+                    const jsonString = extractJsonString(textContent);
+                    if (jsonString) {
+                        const jsonData = JSON.parse(jsonString);
+                        // Heuristic: Check for common Kibana/ES response keys
+                        if (jsonData && (jsonData.hits !== undefined || jsonData.aggregations !== undefined || jsonData.took !== undefined || jsonData._shards !== undefined)) {
+                            console.log('Found JSON in a Monaco editor instance (heuristic match)', jsonData);
+                            return resolve(jsonData);
+                        } else {
+                            console.log('Parsed JSON from Monaco, but did not pass heuristic for Kibana response:', jsonData);
+                        }
+                    }
+                } catch (e) {
+                    // console.log("Error parsing JSON from a Monaco editor instance:", e); // Be less verbose for failed attempts
+                }
+            }
         }
-      }
     }
+    // END NEW MONACO EDITOR LOGIC
     
     // Try to find text that looks like JSON anywhere in the page
     try {

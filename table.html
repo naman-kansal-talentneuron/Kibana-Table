@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Kibana Data Table Preview</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f5f5f5;
+    }
+    .container {
+      background-color: white;
+      padding: 20px;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-top: 0;
+    }
+    .controls {
+      margin-bottom: 15px;
+      display: flex;
+      gap: 10px;
+    }
+    button {
+      padding: 8px 16px;
+      background-color: #0078d7;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0063b1;
+    }
+    #searchInput {
+      padding: 8px;
+      width: 300px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      padding: 10px;
+      border: 1px solid #ddd;
+      text-align: left;
+    }
+    th {
+      background-color: #f0f0f0;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    th:hover {
+      background-color: #e0e0e0;
+    }
+    tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+    tr:hover {
+      background-color: #f1f1f1;
+    }
+    .pagination {
+      margin-top: 20px;
+      display: flex;
+      justify-content: center;
+      gap: 5px;
+    }
+    .pagination button {
+      padding: 5px 10px;
+    }
+    .pagination span {
+      padding: 5px 10px;
+    }
+    .no-data {
+      text-align: center;
+      padding: 50px;
+      color: #999;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Kibana Data Table Preview</h1>
+    
+    <div class="controls">
+      <input type="text" id="searchInput" placeholder="Search in table...">
+      <button id="exportCSV">Export to CSV</button>
+      <button id="exportExcel">Export to Excel</button>
+    </div>
+    
+    <div id="tableContainer">
+      <p class="no-data">Loading data...</p>
+    </div>
+    
+    <div class="pagination">
+      <button id="firstPage">First</button>
+      <button id="prevPage">Previous</button>
+      <span id="pageInfo">Page 1 of 1</span>
+      <button id="nextPage">Next</button>
+      <button id="lastPage">Last</button>
+    </div>
+  </div>
+  
+  <script>
+    // Variables to control pagination
+    let currentData = [];
+    let currentPage = 1;
+    let rowsPerPage = 20;
+    let sortColumn = '';
+    let sortDirection = 'asc';
+    let filteredData = [];
+    
+    // When page loads, retrieve the data
+    document.addEventListener('DOMContentLoaded', function() {
+      // Try to get the data from storage
+      chrome.storage.local.get(['kibanaData'], function(result) {
+        if (result.kibanaData) {
+          const tableData = transformToTableData(result.kibanaData);
+          if (tableData && tableData.length > 0) {
+            currentData = tableData;
+            filteredData = [...tableData];
+            renderTable();
+          } else {
+            document.querySelector('#tableContainer').innerHTML = 
+              '<p class="no-data">No valid data found. Please extract data from a Kibana dashboard first.</p>';
+          }
+        } else {
+          document.querySelector('#tableContainer').innerHTML = 
+            '<p class="no-data">No data found. Please extract data from a Kibana dashboard first.</p>';
+        }
+      });
+      
+      // Set up event listeners
+      document.getElementById('searchInput').addEventListener('input', handleSearch);
+      document.getElementById('exportCSV').addEventListener('click', handleCSVExport);
+      document.getElementById('exportExcel').addEventListener('click', handleExcelExport);
+      document.getElementById('firstPage').addEventListener('click', () => goToPage(1));
+      document.getElementById('prevPage').addEventListener('click', () => goToPage(currentPage - 1));
+      document.getElementById('nextPage').addEventListener('click', () => goToPage(currentPage + 1));
+      document.getElementById('lastPage').addEventListener('click', () => {
+        const maxPage = Math.ceil(filteredData.length / rowsPerPage);
+        goToPage(maxPage);
+      });
+    });
+    
+    // Function to transform Kibana data into a table format
+    function transformToTableData(kibanaData) {
+      if (!kibanaData || !kibanaData.aggregations || !kibanaData.aggregations.country_agg) {
+        return [];
+      }
+
+      const result = [];
+      const countryBuckets = kibanaData.aggregations.country_agg.buckets;
+
+      for (const country of countryBuckets) {
+        const countryCode = country.key;
+        const totalDocCount = country.doc_count;
+        
+        if (country.source_name_agg && country.source_name_agg.buckets) {
+          for (const source of country.source_name_agg.buckets) {
+            if (!source.key) continue;
+            
+            const row = {
+              countryCode: countryCode,
+              totalDocCount: totalDocCount,
+              sourceName: source.key,
+              sourceDocCount: source.doc_count || 0
+            };
+            
+            // Add monthly job counts if available
+            if (source.monthly_job_count && source.monthly_job_count.buckets) {
+              source.monthly_job_count.buckets.forEach(monthBucket => {
+                if (monthBucket.key_as_string) {
+                  row[`month_${monthBucket.key_as_string}`] = monthBucket.doc_count;
+                }
+              });
+            }
+            
+            result.push(row);
+          }
+        }
+      }
+      
+      return result;
+    }
+    
+    // Function to render the table
+    function renderTable() {
+      const start = (currentPage - 1) * rowsPerPage;
+      const end = start + rowsPerPage;
+      const pageData = filteredData.slice(start, end);
+      
+      if (pageData.length === 0) {
+        document.querySelector('#tableContainer').innerHTML = 
+          '<p class="no-data">No matching data found.</p>';
+        return;
+      }
+      
+      // Get all unique headers
+      const headers = [];
+      filteredData.forEach(row => {
+        Object.keys(row).forEach(key => {
+          if (!headers.includes(key)) {
+            headers.push(key);
+          }
+        });
+      });
+      
+      // Sort headers for better display - put common columns first
+      const priorityHeaders = ['countryCode', 'sourceName', 'totalDocCount', 'sourceDocCount'];
+      headers.sort((a, b) => {
+        const aIndex = priorityHeaders.indexOf(a);
+        const bIndex = priorityHeaders.indexOf(b);
+        
+        if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+        if (aIndex !== -1) return -1;
+        if (bIndex !== -1) return 1;
+        return a.localeCompare(b);
+      });
+      
+      // Create table HTML
+      let tableHTML = '<table><thead><tr>';
+      headers.forEach(header => {
+        let sortIndicator = '';
+        if (header === sortColumn) {
+          sortIndicator = sortDirection === 'asc' ? ' ▲' : ' ▼';
+        }
+        tableHTML += `<th data-column="${header}">${formatHeader(header)}${sortIndicator}</th>`;
+      });
+      tableHTML += '</tr></thead><tbody>';
+      
+      pageData.forEach(row => {
+        tableHTML += '<tr>';
+        headers.forEach(header => {
+          const value = row[header] !== undefined ? row[header] : '';
+          tableHTML += `<td>${value}</td>`;
+        });
+        tableHTML += '</tr>';
+      });
+      
+      tableHTML += '</tbody></table>';
+      
+      document.querySelector('#tableContainer').innerHTML = tableHTML;
+      
+      // Update pagination info
+      const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+      document.querySelector('#pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+      
+      // Add sort event listeners to column headers
+      document.querySelectorAll('th').forEach(th => {
+        th.addEventListener('click', () => sortTable(th.dataset.column));
+      });
+    }
+    
+    // Format header for display
+    function formatHeader(header) {
+      // Convert snake_case or camelCase to Title Case with spaces
+      return header
+        .replace(/_/g, ' ')
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/^month_/, 'Month: ')
+        .replace(/^./, str => str.toUpperCase());
+    }
+    
+    // Handle search
+    function handleSearch(e) {
+      const searchTerm = e.target.value.toLowerCase();
+      
+      if (searchTerm === '') {
+        filteredData = [...currentData];
+      } else {
+        filteredData = currentData.filter(row => {
+          return Object.values(row).some(value => 
+            String(value).toLowerCase().includes(searchTerm)
+          );
+        });
+      }
+      
+      currentPage = 1;
+      renderTable();
+    }
+    
+    // Handle table sorting
+    function sortTable(column) {
+      if (sortColumn === column) {
+        // Toggle direction if same column
+        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortColumn = column;
+        sortDirection = 'asc';
+      }
+      
+      filteredData.sort((a, b) => {
+        const valueA = a[column] !== undefined ? a[column] : '';
+        const valueB = b[column] !== undefined ? b[column] : '';
+        
+        // Numeric sort for numbers
+        if (!isNaN(valueA) && !isNaN(valueB)) {
+          return sortDirection === 'asc' 
+            ? Number(valueA) - Number(valueB)
+            : Number(valueB) - Number(valueA);
+        }
+        
+        // String sort
+        const comparison = String(valueA).localeCompare(String(valueB));
+        return sortDirection === 'asc' ? comparison : -comparison;
+      });
+      
+      renderTable();
+    }
+    
+    // Handle pagination
+    function goToPage(page) {
+      const maxPage = Math.ceil(filteredData.length / rowsPerPage);
+      if (page < 1 || page > maxPage) return;
+      
+      currentPage = page;
+      renderTable();
+    }
+    
+    // Export functions
+    function handleCSVExport() {
+      exportToCSV(filteredData);
+    }
+    
+    function handleExcelExport() {
+      exportToExcel(filteredData);
+    }
+    
+    function exportToCSV(data) {
+      if (!data || data.length === 0) {
+        alert("No data to export");
+        return;
+      }
+      
+      // Get all headers (column names)
+      const headers = [];
+      data.forEach(row => {
+        Object.keys(row).forEach(key => {
+          if (!headers.includes(key)) {
+            headers.push(key);
+          }
+        });
+      });
+      
+      // Create CSV content
+      let csvContent = headers.join(',') + '\n';
+      
+      data.forEach(row => {
+        const values = headers.map(header => {
+          const value = row[header] !== undefined ? row[header] : '';
+          // Escape quotes and wrap in quotes if needed
+          const escaped = String(value).replace(/"/g, '""');
+          return `"${escaped}"`;
+        });
+        csvContent += values.join(',') + '\n';
+      });
+      
+      // Create and trigger download
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `kibana_data_${new Date().toISOString().slice(0,10)}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    
+    function exportToExcel(data) {
+      if (!data || data.length === 0) {
+        alert("No data to export");
+        return;
+      }
+      
+      // For Excel, we'll create a CSV with UTF-8 BOM
+      
+      // Get all headers (column names)
+      const headers = [];
+      data.forEach(row => {
+        Object.keys(row).forEach(key => {
+          if (!headers.includes(key)) {
+            headers.push(key);
+          }
+        });
+      });
+      
+      // Create CSV content with UTF-8 BOM
+      let csvContent = '\ufeff' + headers.join(',') + '\n';
+      
+      data.forEach(row => {
+        const values = headers.map(header => {
+          const value = row[header] !== undefined ? row[header] : '';
+          // Escape quotes and wrap in quotes
+          const escaped = String(value).replace(/"/g, '""');
+          return `"${escaped}"`;
+        });
+        csvContent += values.join(',') + '\n';
+      });
+      
+      // Create and trigger download
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `kibana_data_${new Date().toISOString().slice(0,10)}.xlsx`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  </script>
+</body>
+</html>

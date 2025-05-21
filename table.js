@@ -1,4 +1,3 @@
-// filepath: c:\Users\naman\OneDrive\Desktop\Kibana-Table\table.js
 // Global variables
 let kibanaData = null;
 let tableData = [];
@@ -12,6 +11,11 @@ let allColumns = [];
 
 // Initialize when the page loads
 document.addEventListener('DOMContentLoaded', function() {
+  console.log("DOM Content loaded");
+  
+  // Initialize Bootstrap dropdowns
+  initializeBootstrapComponents();
+  
   // Set up event listeners
   document.getElementById('searchInput').addEventListener('input', handleSearch);
   document.getElementById('rowsPerPage').addEventListener('change', handleRowsPerPageChange);
@@ -20,23 +24,186 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('selectAllColumns').addEventListener('click', selectAllColumns);
   document.getElementById('deselectAllColumns').addEventListener('click', deselectAllColumns);
   
+  // Add debug features
+  addDebugFeatures();
+  
   // Load data
   loadData();
 });
+
+// Initialize Bootstrap components
+function initializeBootstrapComponents() {
+  // Check if Bootstrap JS is already loaded
+  if (typeof bootstrap !== 'undefined') {
+    console.log("Bootstrap already loaded");
+    initDropdowns();
+    return;
+  }
+  
+  console.log("Bootstrap not available, using custom dropdown implementation");
+  // We're relying on bootstrap-fallback.js to handle loading Bootstrap
+  // or providing a fallback implementation
+  initCustomDropdowns();
+}
+
+// Initialize Bootstrap dropdowns if Bootstrap is available
+function initDropdowns() {
+  if (typeof bootstrap !== 'undefined') {
+    try {
+      const dropdownElementList = document.querySelectorAll('[data-bs-toggle="dropdown"]');
+      dropdownElementList.forEach(function(dropdownToggleEl) {
+        new bootstrap.Dropdown(dropdownToggleEl);
+      });
+      console.log("Bootstrap dropdowns initialized");
+    } catch (e) {
+      console.error("Error initializing Bootstrap dropdowns:", e);
+      initCustomDropdowns();
+    }
+  } else {
+    initCustomDropdowns();
+  }
+}
+
+// Fallback custom dropdown implementation
+function initCustomDropdowns() {
+  console.log("Using custom dropdown implementation");
+  document.querySelectorAll('[data-bs-toggle="dropdown"]').forEach(function(element) {
+    element.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const dropdownMenu = this.nextElementSibling;
+      if (dropdownMenu.classList.contains('show')) {
+        dropdownMenu.classList.remove('show');
+      } else {
+        // Hide any open dropdowns
+        document.querySelectorAll('.dropdown-menu.show').forEach(function(menu) {
+          menu.classList.remove('show');
+        });
+        dropdownMenu.classList.add('show');
+      }
+    });
+  });
+  
+  // Close dropdowns when clicking outside
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.dropdown')) {
+      document.querySelectorAll('.dropdown-menu.show').forEach(function(menu) {
+        menu.classList.remove('show');
+      });
+    }
+  });
+}
 
 // Load data from chrome.storage
 function loadData() {
   showLoading(true);
   
-  chrome.storage.local.get('kibanaData', function(result) {
-    if (result.kibanaData) {
-      kibanaData = result.kibanaData;
-      processData();
-    } else {
-      showEmptyState(true);
-      showLoading(false);
+  try {
+    // First check if chrome API is available
+    if (typeof chrome === 'undefined' || !chrome.storage) {
+      console.warn("Chrome storage API not available");
+      if (!tryLoadFromUrlFragment() && !checkLocalStorage()) {
+        showError("Chrome storage API not available. This extension requires Chrome API access.");
+      }
+      return;
     }
-  });
+    
+    chrome.storage.local.get('kibanaData', function(result) {
+      console.log("Storage get result:", result);
+      
+      if (chrome.runtime.lastError) {
+        console.error("Chrome storage error:", chrome.runtime.lastError);
+        if (!tryLoadFromUrlFragment() && !checkLocalStorage()) {
+          showError(`Error loading data: ${chrome.runtime.lastError.message}`);
+        }
+        return;
+      }
+      
+      if (result && result.kibanaData) {
+        console.log("Got kibana data from storage");
+        kibanaData = result.kibanaData;
+        processData();
+      } else {
+        console.warn("No kibana data found in storage");
+        if (!tryLoadFromUrlFragment() && !checkLocalStorage()) {
+          showEmptyState(true);
+          showLoading(false);
+        }
+      }
+    });
+  } catch (e) {
+    console.error("Exception during storage access:", e);
+    if (!tryLoadFromUrlFragment() && !checkLocalStorage()) {
+      showError(`Failed to load data: ${e.message}`);
+    }
+  }
+}
+
+// Check localStorage for data (useful for debugging in standalone HTML)
+function checkLocalStorage() {
+  try {
+    const localData = localStorage.getItem('kibanaData');
+    if (localData) {
+      console.log("Found data in localStorage");
+      kibanaData = JSON.parse(localData);
+      return true;
+    }
+  } catch (e) {
+    console.warn("Error accessing localStorage:", e);
+  }
+  return false;
+}
+
+// Attempt to load data from URL fragment if storage fails
+function tryLoadFromUrlFragment() {
+  try {
+    const hash = window.location.hash.substring(1);
+    if (hash) {
+      // The hash might contain the storage key or encoded data
+      if (hash === 'debug') {
+        // Check localStorage first
+        if (checkLocalStorage()) {
+          console.log("Loaded data from localStorage in debug mode");
+          processData();
+          return true;
+        }
+        
+        // If localStorage doesn't have data, create sample data
+        console.log("Creating sample debug data");
+        kibanaData = {
+          "hits": {
+            "hits": [
+              {
+                "_id": "sample1",
+                "_index": "test-index",
+                "_score": 1.0,
+                "_source": {
+                  "field1": "Sample Value 1",
+                  "field2": 123,
+                  "nested": { "value": "test" }
+                }
+              },
+              {
+                "_id": "sample2",
+                "_index": "test-index",
+                "_score": 1.0,
+                "_source": {
+                  "field1": "Sample Value 2",
+                  "field2": 456,
+                  "nested": { "value": "test2" }
+                }
+              }
+            ]
+          }
+        };
+        processData();
+        return true;
+      }
+    }
+  } catch (e) {
+    console.error("Error parsing URL fragment:", e);
+  }
+  return false;
 }
 
 // Process loaded data
@@ -47,86 +214,251 @@ function processData() {
     return;
   }
   
-  // Use content.js transformToTableData to convert the data
-  chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-    chrome.tabs.sendMessage(tabs[0].id, {
-      action: "transformData",
-      data: kibanaData
-    }, function(response) {
-      if (response && response.tableData) {
-        tableData = response.tableData;
-        initializeTable();
-      } else {
-        // Fallback: Import content script and use its functions directly
-        importContentScript()
-          .then(() => {
-            // This assumes transformToTableData is exposed globally
-            tableData = window.transformToTableData(kibanaData);
-            initializeTable();
-          })
-          .catch(error => {
-            console.error("Error importing content script:", error);
-            showError("Could not process data. Please go back and extract again.");
-          });
-      }
-    });
-  });
-}
-
-// Import content.js script to use its functions
-function importContentScript() {
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'content.js';
-    script.onload = resolve;
-    script.onerror = reject;
-    document.head.appendChild(script);
-  });
-}
-
-// Initialize table after data is loaded
-function initializeTable() {
-  if (!tableData || tableData.length === 0) {
+  // Process the JSON data and convert it to table format
+  tableData = transformToTableData(kibanaData);
+  
+  if (tableData.length === 0) {
     showEmptyState(true);
     showLoading(false);
     return;
   }
   
-  // Get all unique columns from the data
-  allColumns = getUniqueColumns(tableData);
+  // Identify all columns from the data
+  identifyColumns();
   
-  // Initially, all columns are visible
+  // Initialize visibility for all columns (all visible by default)
   visibleColumns = new Set(allColumns);
   
-  // Initialize column toggle dropdowns
-  initializeColumnToggle();
+  // Create column toggle UI
+  createColumnToggleUI();
   
-  // Set initial sort and filtered data
+  // Apply initial filtering and sorting
   filteredData = [...tableData];
   
   // Render the table
   renderTable();
   renderPagination();
-  
-  // Hide loading state
   showLoading(false);
 }
 
-// Get all unique columns from the data
-function getUniqueColumns(data) {
-  const columns = new Set();
+// Transform Kibana JSON data into table format
+function transformToTableData(kibanaData) {
+  if (!kibanaData) return [];
   
-  data.forEach(row => {
-    Object.keys(row).forEach(key => columns.add(key));
-  });
+  // Case 1: Handle country_agg structure
+  if (kibanaData.aggregations && kibanaData.aggregations.country_agg) {
+    return transformCountryAggData(kibanaData);
+  }
   
-  return Array.from(columns);
+  // Case 2: Handle other aggregation structures
+  if (kibanaData.aggregations) {
+    return transformGenericAggregations(kibanaData.aggregations);
+  }
+  
+  // Case 3: Handle hits from search results
+  if (kibanaData.hits && kibanaData.hits.hits) {
+    return transformSearchHits(kibanaData.hits.hits);
+  }
+  
+  // Case 4: Handle any other JSON structure as a fallback
+  return [flattenObject(kibanaData)];
 }
 
-// Initialize column toggle dropdown
-function initializeColumnToggle() {
+// Handle country_agg structure 
+function transformCountryAggData(kibanaData) {
+  const result = [];
+  const countryBuckets = kibanaData.aggregations.country_agg.buckets;
+  
+  for (const country of countryBuckets) {
+    const countryCode = country.key;
+    const totalDocCount = country.doc_count;
+    
+    if (country.source_name_agg && country.source_name_agg.buckets) {
+      for (const source of country.source_name_agg.buckets) {
+        if (!source.key) continue;
+        
+        const row = {
+          countryCode: countryCode,
+          totalDocCount: totalDocCount,
+          sourceName: source.key,
+          sourceDocCount: source.doc_count
+        };
+        
+        // Add monthly job counts if available
+        if (source.monthly_job_count && source.monthly_job_count.buckets) {
+          source.monthly_job_count.buckets.forEach(monthBucket => {
+            if (monthBucket.key_as_string) {
+              row[`month_${monthBucket.key_as_string}`] = monthBucket.doc_count;
+            }
+          });
+        }
+        
+        result.push(row);
+      }
+    } else {
+      // Handle case where country has no source_name_agg
+      result.push({
+        countryCode: countryCode,
+        totalDocCount: totalDocCount
+      });
+    }
+  }
+  
+  return result;
+}
+
+// Handle generic aggregation structures
+function transformGenericAggregations(aggregations) {
+  const result = [];
+  
+  // Process each top-level aggregation
+  Object.entries(aggregations).forEach(([aggName, aggData]) => {
+    if (aggData.buckets) {
+      // Handle bucket aggregations
+      aggData.buckets.forEach(bucket => {
+        const row = {
+          aggregation: aggName,
+          key: bucket.key,
+          doc_count: bucket.doc_count
+        };
+        
+        // Add any additional fields from the bucket
+        Object.entries(bucket).forEach(([key, value]) => {
+          if (key !== 'key' && key !== 'doc_count') {
+            if (typeof value === 'object' && value !== null) {
+              // Handle sub-aggregations
+              if (value.buckets) {
+                // For sub-buckets, add top values
+                value.buckets.slice(0, 5).forEach((subBucket, index) => {
+                  row[`${key}_${index}_key`] = subBucket.key;
+                  row[`${key}_${index}_count`] = subBucket.doc_count;
+                });
+              } else if (value.value !== undefined) {
+                // For metrics
+                row[key] = value.value;
+              }
+            } else {
+              row[key] = value;
+            }
+          }
+        });
+        
+        result.push(row);
+      });
+    } else if (aggData.value !== undefined) {
+      // Handle metric aggregations
+      result.push({
+        aggregation: aggName,
+        value: aggData.value
+      });
+    }
+  });
+  
+  return result;
+}
+
+// Handle search hits
+function transformSearchHits(hits) {
+  return hits.map(hit => {
+    const row = {
+      _id: hit._id,
+      _index: hit._index,
+      _score: hit._score
+    };
+    
+    // Flatten _source if available
+    if (hit._source) {
+      const flattenedSource = flattenObject(hit._source);
+      Object.assign(row, flattenedSource);
+    }
+    
+    // Add any other fields
+    Object.entries(hit).forEach(([key, value]) => {
+      if (key !== '_id' && key !== '_index' && key !== '_score' && key !== '_source') {
+        if (typeof value === 'object' && value !== null) {
+          const flattened = flattenObject(value, key);
+          Object.assign(row, flattened);
+        } else {
+          row[key] = value;
+        }
+      }
+    });
+    
+    return row;
+  });
+}
+
+// Helper function to flatten nested objects
+function flattenObject(obj, prefix = '') {
+  const flattened = {};
+  
+  function _flatten(obj, prefix) {
+    if (!obj) return;
+    
+    for (const key in obj) {
+      if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
+      
+      const value = obj[key];
+      const newKey = prefix ? `${prefix}.${key}` : key;
+      
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        _flatten(value, newKey);
+      } else if (Array.isArray(value)) {
+        // Handle arrays more intelligently
+        if (value.length === 0) {
+          // Empty array
+          flattened[newKey] = '[]';
+        } else if (typeof value[0] === 'object' && value[0] !== null) {
+          // Array of objects - flatten first few and indicate total count
+          const maxItems = 3; // Only process first few items to avoid explosion
+          for (let i = 0; i < Math.min(value.length, maxItems); i++) {
+            _flatten(value[i], `${newKey}[${i}]`);
+          }
+          if (value.length > maxItems) {
+            flattened[`${newKey}.length`] = `${value.length} items total`;
+          }
+        } else {
+          // Array of primitives - join with commas
+          flattened[newKey] = value.join(', ');
+        }
+      } else {
+        // Handle primitive values
+        flattened[newKey] = value;
+      }
+    }
+  }
+  
+  _flatten(obj, prefix);
+  return flattened;
+}
+
+// Identify all columns from the data
+function identifyColumns() {
+  allColumns = [];
+  const columnsSet = new Set();
+  
+  tableData.forEach(row => {
+    Object.keys(row).forEach(key => {
+      columnsSet.add(key);
+    });
+  });
+  
+  allColumns = Array.from(columnsSet);
+}
+
+// Create the column toggle UI
+function createColumnToggleUI() {
   const container = document.getElementById('columnToggle');
+  
+  // Clear previous content except the buttons at the bottom
+  const buttonsDiv = container.querySelector('.d-grid');
   container.innerHTML = '';
+  
+  // Create a wrapper for the checkboxes
+  const checkboxesDiv = document.createElement('div');
+  checkboxesDiv.className = 'mb-2';
+  checkboxesDiv.style.maxHeight = '250px';
+  checkboxesDiv.style.overflowY = 'auto';
   
   allColumns.forEach(column => {
     const div = document.createElement('div');
@@ -148,17 +480,108 @@ function initializeColumnToggle() {
     
     div.appendChild(input);
     div.appendChild(label);
-    container.appendChild(div);
+    checkboxesDiv.appendChild(div);
   });
   
-  // Add select/deselect all buttons
-  document.getElementById('selectAllColumns').addEventListener('click', selectAllColumns);
-  document.getElementById('deselectAllColumns').addEventListener('click', deselectAllColumns);
+  // Add the checkboxes to the container
+  container.appendChild(checkboxesDiv);
+  
+  // Re-add the buttons
+  if (buttonsDiv) {
+    container.appendChild(buttonsDiv);
+  } else {
+    // If buttons div doesn't exist, recreate it
+    const newButtonsDiv = document.createElement('div');
+    newButtonsDiv.className = 'd-grid gap-2 mt-2';
+    
+    const selectAllBtn = document.createElement('button');
+    selectAllBtn.className = 'btn btn-sm btn-outline-primary';
+    selectAllBtn.id = 'selectAllColumns';
+    selectAllBtn.textContent = 'Select All';
+    selectAllBtn.type = 'button';
+    selectAllBtn.addEventListener('click', selectAllColumns);
+    
+    const deselectAllBtn = document.createElement('button');
+    deselectAllBtn.className = 'btn btn-sm btn-outline-secondary';
+    deselectAllBtn.id = 'deselectAllColumns';
+    deselectAllBtn.textContent = 'Deselect All';
+    deselectAllBtn.type = 'button';
+    deselectAllBtn.addEventListener('click', deselectAllColumns);
+    
+    newButtonsDiv.appendChild(selectAllBtn);
+    newButtonsDiv.appendChild(deselectAllBtn);
+    container.appendChild(newButtonsDiv);
+  }
+}
+
+// Event handler for column visibility toggle
+function handleColumnToggle(e) {
+  const column = e.target.dataset.column;
+  
+  if (e.target.checked) {
+    visibleColumns.add(column);
+  } else {
+    // Prevent unchecking the last visible column
+    if (visibleColumns.size <= 1 && visibleColumns.has(column)) {
+      e.target.checked = true;
+      showError("At least one column must remain visible");
+      return;
+    }
+    visibleColumns.delete(column);
+  }
+  
+  // Redraw the table with updated column visibility
+  renderTable();
+}
+
+// Handle sorting of the table
+function handleSort(column) {
+  // If same column, toggle direction; otherwise set new column with default asc
+  if (sortColumn === column) {
+    sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortColumn = column;
+    sortDirection = 'asc';
+  }
+  
+  // Sort the data
+  filteredData.sort((a, b) => {
+    const valA = a[column] !== undefined ? a[column] : '';
+    const valB = b[column] !== undefined ? b[column] : '';
+    
+    // Handle numeric values
+    if (!isNaN(valA) && !isNaN(valB)) {
+      return sortDirection === 'asc' 
+        ? Number(valA) - Number(valB) 
+        : Number(valB) - Number(valA);
+    }
+    
+    // Handle string values
+    const strA = String(valA).toLowerCase();
+    const strB = String(valB).toLowerCase();
+    
+    if (sortDirection === 'asc') {
+      return strA.localeCompare(strB);
+    } else {
+      return strB.localeCompare(strA);
+    }
+  });
+  
+  // Reset to first page
+  currentPage = 1;
+  
+  // Redraw
+  renderTable();
+  renderPagination();
 }
 
 // Render the table with current data and settings
 function renderTable() {
   const container = document.getElementById('tableContainer');
+  if (!container) {
+    console.error("Table container not found");
+    return;
+  }
   
   // Calculate pagination
   const start = rowsPerPage === -1 ? 0 : (currentPage - 1) * rowsPerPage;
@@ -171,9 +594,10 @@ function renderTable() {
   
   // Create header
   const thead = document.createElement('thead');
+  thead.className = 'table-light';
   const headerRow = document.createElement('tr');
   
-  // Only show visible columns
+  // Only show visible columns and create headers
   allColumns
     .filter(column => visibleColumns.has(column))
     .forEach(column => {
@@ -420,62 +844,90 @@ function handleRowsPerPageChange(e) {
   renderPagination();
 }
 
-// Event handler for column sorting
-function handleSort(column) {
-  if (sortColumn === column) {
-    // Toggle direction
-    sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-  } else {
-    sortColumn = column;
-    sortDirection = 'asc';
+// Export data to CSV format
+function handleExportCsv() {
+  if (!tableData || tableData.length === 0) {
+    alert("No data to export");
+    return;
   }
   
-  filteredData.sort((a, b) => {
-    const valueA = a[column];
-    const valueB = b[column];
-    
-    // Handle null/undefined values
-    if (valueA === null || valueA === undefined) return sortDirection === 'asc' ? -1 : 1;
-    if (valueB === null || valueB === undefined) return sortDirection === 'asc' ? 1 : -1;
-    
-    // Compare based on type
-    if (typeof valueA === 'number' && typeof valueB === 'number') {
-      return sortDirection === 'asc' ? valueA - valueB : valueB - valueA;
-    }
-    
-    // Default string comparison
-    const strA = String(valueA).toLowerCase();
-    const strB = String(valueB).toLowerCase();
-    
-    return sortDirection === 'asc' 
-      ? strA.localeCompare(strB) 
-      : strB.localeCompare(strA);
+  // Get all headers (column names)
+  const headers = allColumns;
+  
+  // Create CSV content
+  let csvContent = headers.join(',') + '\n';
+  
+  tableData.forEach(row => {
+    const values = headers.map(header => {
+      const value = row[header] !== undefined ? row[header] : '';
+      // Escape quotes and wrap in quotes if value contains comma
+      const escaped = String(value).replace(/"/g, '""');
+      return `"${escaped}"`;
+    });
+    csvContent += values.join(',') + '\n';
   });
   
-  renderTable();
+  // Create and trigger download
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `kibana_data_${new Date().toISOString().slice(0,10)}.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
-// Event handler for column visibility toggle
-function handleColumnToggle(e) {
-  const column = e.target.dataset.column;
-  
-  if (e.target.checked) {
-    visibleColumns.add(column);
-  } else {
-    visibleColumns.delete(column);
+// Export data to Excel format
+function handleExportExcel() {
+  if (!tableData || tableData.length === 0) {
+    alert("No data to export");
+    return;
   }
   
-  renderTable();
+  // Get all headers (column names)
+  const headers = allColumns;
+  
+  // Create CSV content with UTF-8 BOM for Excel
+  let csvContent = '\ufeff' + headers.join(',') + '\n';
+  
+  tableData.forEach(row => {
+    const values = headers.map(header => {
+      const value = row[header] !== undefined ? row[header] : '';
+      // Escape quotes and wrap in quotes if value contains comma
+      const escaped = String(value).replace(/"/g, '""');
+      return `"${escaped}"`;
+    });
+    csvContent += values.join(',') + '\n';
+  });
+  
+  // Create and trigger download
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `kibana_data_${new Date().toISOString().slice(0,10)}.xlsx`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 // Select all columns
 function selectAllColumns() {
+  // Update the visibleColumns set
   allColumns.forEach(column => {
     visibleColumns.add(column);
+  });
+  
+  // Update checkbox states
+  allColumns.forEach(column => {
     const checkbox = document.getElementById(`column-${column}`);
     if (checkbox) checkbox.checked = true;
   });
   
+  // Redraw the table
   renderTable();
 }
 
@@ -483,38 +935,23 @@ function selectAllColumns() {
 function deselectAllColumns() {
   // Keep at least one column visible
   if (allColumns.length > 0) {
+    // Clear current selection
     visibleColumns.clear();
-    visibleColumns.add(allColumns[0]);
     
+    // Keep only the first column visible
+    if (allColumns.length > 0) {
+      visibleColumns.add(allColumns[0]);
+    }
+    
+    // Update checkbox states
     allColumns.forEach(column => {
       const checkbox = document.getElementById(`column-${column}`);
       if (checkbox) checkbox.checked = column === allColumns[0];
     });
     
+    // Redraw the table
     renderTable();
   }
-}
-
-// Export data to CSV format
-function handleExportCsv() {
-  chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-    chrome.tabs.sendMessage(tabs[0].id, {
-      action: 'export',
-      format: 'csv',
-      data: kibanaData
-    });
-  });
-}
-
-// Export data to Excel format
-function handleExportExcel() {
-  chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-    chrome.tabs.sendMessage(tabs[0].id, {
-      action: 'export',
-      format: 'excel',
-      data: kibanaData
-    });
-  });
 }
 
 // Show/hide loading overlay
@@ -524,8 +961,21 @@ function showLoading(show) {
 
 // Show/hide empty state
 function showEmptyState(show) {
-  document.getElementById('emptyState').style.display = show ? 'block' : 'none';
-  document.getElementById('tableContainer').style.display = show ? 'none' : 'block';
+  const emptyState = document.getElementById('emptyState');
+  const tableContainer = document.getElementById('tableContainer');
+  
+  if (emptyState && tableContainer) {
+    emptyState.style.display = show ? 'block' : 'none';
+    tableContainer.style.display = show ? 'none' : 'block';
+    
+    // Update the empty state message
+    if (show) {
+      const messageEl = emptyState.querySelector('p');
+      if (messageEl) {
+        messageEl.textContent = 'No data available. Please paste JSON data in the extension popup and click "Parse JSON".';
+      }
+    }
+  }
 }
 
 // Show error message
@@ -538,4 +988,79 @@ function showError(message) {
     </div>
   `;
   showLoading(false);
+}
+
+// Add debug and troubleshooting function
+function addDebugFeatures() {
+  // Add a message at the top of the page if debug mode
+  if (window.location.hash.includes('debug')) {
+    const container = document.querySelector('.container-fluid');
+    const debugDiv = document.createElement('div');
+    debugDiv.className = 'alert alert-info mb-3';
+    debugDiv.innerHTML = `
+      <strong>Debug Mode Active</strong>
+      <p>Troubleshooting Information:</p>
+      <ul>
+        <li>Bootstrap loaded: ${typeof bootstrap !== 'undefined' ? 'Yes' : 'No'}</li>
+        <li>Using custom dropdown implementation: ${typeof bootstrap === 'undefined' ? 'Yes' : 'No'}</li>
+      </ul>
+      <button id="createSampleData" class="btn btn-sm btn-warning">Create Sample Data</button>
+    `;
+    container.insertBefore(debugDiv, container.firstChild);
+    
+    // Add event listener for the create sample data button
+    setTimeout(() => {
+      const sampleDataBtn = document.getElementById('createSampleData');
+      if (sampleDataBtn) {
+        sampleDataBtn.addEventListener('click', () => {
+          createSampleData();
+        });
+      }
+    }, 500);
+  }
+}
+
+// Create sample data for testing
+function createSampleData() {
+  kibanaData = {
+    "hits": {
+      "hits": [
+        {
+          "_id": "sample1",
+          "_index": "test-index",
+          "_score": 1.0,
+          "_source": {
+            "field1": "Sample Value 1",
+            "field2": 123,
+            "nested": { "value": "test" }
+          }
+        },
+        {
+          "_id": "sample2",
+          "_index": "test-index",
+          "_score": 1.0,
+          "_source": {
+            "field1": "Sample Value 2",
+            "field2": 456,
+            "nested": { "value": "test2" }
+          }
+        },
+        {
+          "_id": "sample3",
+          "_index": "test-index",
+          "_score": 1.0,
+          "_source": {
+            "field1": "Sample Value 3",
+            "field2": 789,
+            "nested": { "value": "test3" }
+          }
+        }
+      ],
+      "total": {
+        "value": 3
+      }
+    }
+  };
+  
+  processData();
 }

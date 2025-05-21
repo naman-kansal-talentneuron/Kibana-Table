@@ -1,6 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Kibana Table Exporter",
+  "short_name": "KibanaTable",
   "version": "1.0.0",
   "description": "Extract and view Kibana data in a table format with sorting, filtering and export options",
   "permissions": [
@@ -9,7 +10,10 @@
     "scripting"
   ],
   "host_permissions": [
-    "*://*/*"
+    "*://*.elastic.co/*",
+    "*://*.elasticsearch.com/*",
+    "*://*.kibana.com/*",
+    "*://localhost:*/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -24,19 +28,36 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "*://*.elastic.co/*",
+        "*://*.elasticsearch.com/*",
+        "*://*.kibana.com/*",
+        "*://localhost:*/*"
+      ],
       "js": ["content.js"]
     }
   ],
   "icons": {
     "16": "images/icon16.png",
     "48": "images/icon48.png",
-    "128": "images/icon128.png"
-  },
+    "128": "images/icon128.png"  },  
   "web_accessible_resources": [
     {
-      "resources": ["table.html", "table.js"],
-      "matches": ["<all_urls>"]
+      "resources": ["table.html", "table.js", "bootstrap-fallback.js", "utils.js", "debug.js", "docs/*", "test-debug.js", "test_debug.html"],
+      "matches": [
+        "*://*.elastic.co/*",
+        "*://*.elasticsearch.com/*",
+        "*://*.kibana.com/*",
+        "*://localhost:*/*"
+      ]
     }
-  ]
+  ],
+
+  "externally_connectable": {
+    "matches": [
+      "*://*.elastic.co/*", 
+      "*://*.elasticsearch.com/*",
+      "*://*.kibana.com/*"
+    ]
+  }
 }

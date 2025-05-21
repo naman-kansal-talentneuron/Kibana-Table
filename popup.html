@@ -104,24 +104,31 @@
     }
   </style>
 </head>
-<body>
-  <div class="header">
-    <img src="icon-48.png" alt="Kibana Table" class="logo">
+<body>  <div class="header">
+    <img src="images/icon48.png" alt="Kibana Table" class="logo">
     <h5 class="mb-0">Kibana Table Exporter</h5>
   </div>
-  
+    <!-- Status indicator is now optional since we don't need to check Kibana -->
+  <!--
   <div id="statusIndicator" class="status-indicator">
     <span class="status-icon" id="statusDot"></span>
     <span id="statusText">Checking Kibana page...</span>
   </div>
+  --><div class="instructions mb-3">
+    <h6>Enter Kibana JSON Data</h6>
+    <p class="text-muted small">Paste the JSON response from Kibana Dev Tools console below:</p>
+  </div>
+
+  <div class="form-group mb-3">
+    <textarea id="jsonInput" class="form-control" rows="8" placeholder="Paste your JSON here..."></textarea>
+  </div>
   
   <div class="action-buttons">
-    <button id="extractButton" class="btn btn-primary btn-icon" disabled>
+    <button id="parseButton" class="btn btn-primary btn-icon">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-        <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
-        <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+        <path d="M9.293 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4.707L9.293 0zM9.5 3.5v-2l3 3h-2a1 1 0 0 1-1-1zM5.884 6.68 8 9.219l2.116-2.54a.5.5 0 1 1 .768.641L8.651 10l2.233 2.68a.5.5 0 0 1-.768.64L8 10.78l-2.116 2.54a.5.5 0 0 1-.768-.641L7.349 10 5.116 7.32a.5.5 0 1 1 .768-.64z"/>
       </svg>
-      Extract Data from Kibana
+      Parse JSON
     </button>
     
     <button id="viewTableButton" class="btn btn-success btn-icon" disabled>
@@ -143,11 +150,12 @@
     <pre id="jsonPreview"></pre>
     <div id="extractionTime" class="extraction-time"></div>
   </div>
-  
-  <div id="notifications">
+    <div id="notifications">
     <!-- Notifications will appear here -->
   </div>
   
+  <script src="utils.js"></script>
+  <script src="debug.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

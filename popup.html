@@ -1,22 +1,48 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Kibana Table Exporter</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.0/font/bootstrap-icons.css" rel="stylesheet">
-  <style>
+  <title>Kibana Table Exporter</title>  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"><style>
+    :root {
+      /* Light mode variables */
+      --background-color: #f8f9fa;
+      --text-color: #212529;
+      --container-bg: #ffffff;
+      --border-color: #dee2e6;
+      --hover-bg: rgba(0,0,0,0.05);
+      --control-bg: #f8f9fa;
+      --shadow-color: rgba(0,0,0,0.1);
+      --muted-text: #6c757d;
+      --link-color: #0d6efd;
+    }
+    
+    [data-theme="dark"] {
+      /* Dark mode variables */
+      --background-color: #121212;
+      --text-color: #e0e0e0;
+      --container-bg: #1e1e1e;
+      --border-color: #444;
+      --hover-bg: rgba(255,255,255,0.08);
+      --control-bg: #2d2d2d;
+      --shadow-color: rgba(0,0,0,0.3);
+      --muted-text: #adb5bd;
+      --link-color: #6ea8fe;
+    }
+  
     body {
       width: 360px;
       min-height: 250px;
       padding: 15px;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    }
-    
-    .header {
+      background-color: var(--background-color);
+      color: var(--text-color);
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }    .header {
       display: flex;
       align-items: center;
+      justify-content: space-between;
       margin-bottom: 20px;
-      border-bottom: 1px solid #dee2e6;
+      border-bottom: 1px solid var(--border-color);
       padding-bottom: 10px;
     }
     
@@ -25,14 +51,13 @@
       height: 32px;
       margin-right: 10px;
     }
-    
-    .status-indicator {
+      .status-indicator {
       display: flex;
       align-items: center;
       margin-bottom: 15px;
       padding: 8px 10px;
       border-radius: 4px;
-      background-color: #f8f9fa;
+      background-color: var(--control-bg);
       font-size: 0.875rem;
     }
     
@@ -60,23 +85,23 @@
       flex-direction: column;
       gap: 10px;
     }
-    
-    .preview-container {
+      .preview-container {
       margin-top: 15px;
       max-height: 150px;
       overflow-y: auto;
-      background-color: #f8f9fa;
+      background-color: var(--control-bg);
       border-radius: 4px;
       padding: 10px;
       font-size: 0.8rem;
       font-family: monospace;
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
     }
-    
-    .extraction-time {
+      .extraction-time {
       font-size: 0.75rem;
       text-align: center;
       margin-top: 8px;
-      color: #6c757d;
+      color: var(--muted-text);
     }
     
     .notification {
@@ -98,15 +123,127 @@
       align-items: center;
       justify-content: center;
     }
-    
-    .btn-icon svg {
+      .btn-icon svg {
       margin-right: 8px;
+    }
+    
+    /* Theme toggle switch styles */
+    .theme-toggle {
+      display: flex;
+      align-items: center;
+      margin-left: auto;
+    }
+    
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 24px;
+    }
+    
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .3s;
+      border-radius: 24px;
+    }
+    
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    
+    input:checked + .slider {
+      background-color: #0d6efd;
+    }
+    
+    input:focus + .slider {
+      box-shadow: 0 0 1px #0d6efd;
+    }
+    
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+    
+    .slider .icons {
+      display: flex;
+      justify-content: space-between;
+      padding: 0 5px;
+      line-height: 24px;
+    }
+    
+    .slider .icons i {
+      color: white;
+      font-size: 0.75rem;
+    }
+    
+    /* Dark mode specific styles */    [data-theme="dark"] textarea, 
+    [data-theme="dark"] .form-control {
+      background-color: var(--control-bg);
+      border-color: var(--border-color);
+      color: var(--text-color);
+    }
+    
+    [data-theme="dark"] .notification {
+      color: var(--text-color);
+    }
+    
+    [data-theme="dark"] .notification.alert-info {
+      background-color: #204263;
+      border-color: #2b4a63;
+    }
+    
+    [data-theme="dark"] .notification.alert-success {
+      background-color: #1b412b;
+      border-color: #2a5a3d;
+    }
+    
+    [data-theme="dark"] .notification.alert-warning {
+      background-color: #594214;
+      border-color: #6b541f;
+    }
+    
+    [data-theme="dark"] .notification.alert-danger {
+      background-color: #453232;
+      border-color: #622525;
     }
   </style>
 </head>
 <body>  <div class="header">
-    <img src="images/icon48.png" alt="Kibana Table" class="logo">
-    <h5 class="mb-0">Kibana Table Exporter</h5>
+    <div class="d-flex align-items-center">
+      <img src="images/icon48.png" alt="Kibana Table" class="logo">
+      <h5 class="mb-0">Kibana Table Exporter</h5>
+    </div>
+    <!-- Theme Toggle Switch -->
+    <div class="theme-toggle">
+      <label class="switch">
+        <input type="checkbox" id="themeToggle" checked>
+        <span class="slider">
+          <div class="icons">
+            <i class="bi bi-moon-fill"></i>
+            <i class="bi bi-sun-fill"></i>
+          </div>
+        </span>
+      </label>
+    </div>
   </div>
     <!-- Status indicator is now optional since we don't need to check Kibana -->
   <!--

@@ -3,6 +3,7 @@
 // Variables to track state
 let dataExtracted = false;
 let extractedData = null;
+let currentTheme = 'dark'; // Default theme is dark mode
 
 // When popup opens
 document.addEventListener('DOMContentLoaded', function() {
@@ -10,6 +11,10 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('parseButton').addEventListener('click', parseJsonInput);
   document.getElementById('viewTableButton').addEventListener('click', viewTable);
   document.getElementById('clearButton').addEventListener('click', clearData);
+  document.getElementById('themeToggle').addEventListener('change', handleThemeToggle);
+  
+  // Initialize theme from saved preference
+  initializeTheme();
   
   // Check if we already have extracted data
   chrome.storage.local.get(['kibanaData', 'extractionTime'], function(result) {
@@ -143,10 +148,46 @@ function truncateData(data, maxDepth = 2, currentDepth = 0) {
     const key = keys[i];
     result[key] = truncateData(data[key], maxDepth, currentDepth + 1);
   }
-  
-  if (keys.length > maxKeys) {
+    if (keys.length > maxKeys) {
     result["..."] = `(${keys.length - maxKeys} more items)`;
   }
   
   return result;
+}
+
+// Initialize theme from saved preference
+function initializeTheme() {
+  // Try to get saved preference or default to dark mode
+  chrome.storage.local.get(['theme'], function(result) {
+    const savedTheme = result.theme || 'dark';
+    applyTheme(savedTheme);
+    
+    // Update toggle switch state
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+      themeToggle.checked = savedTheme === 'dark';
+    }
+  });
+}
+
+// Handler for theme toggle
+function handleThemeToggle(e) {
+  const isDarkMode = e.target.checked;
+  const newTheme = isDarkMode ? 'dark' : 'light';
+  
+  // Save preference and apply theme
+  saveThemePreference(newTheme);
+  applyTheme(newTheme);
+}
+
+// Save theme preference to Chrome storage
+function saveThemePreference(theme) {
+  currentTheme = theme;
+  chrome.storage.local.set({ theme: theme });
+}
+
+// Apply theme to document
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  currentTheme = theme;
 }

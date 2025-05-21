@@ -264,8 +264,6 @@
       background-color: rgba(13, 110, 253, 0.05);
     }
     
-    .table-hover tbody tr:hover {
-    }
 
     /* Theme toggle switch styles */
     .theme-toggle {
@@ -458,6 +456,44 @@
     input:checked + .slider:before {
       transform: translateX(26px);
     }
+
+    /* Column toggle drag & drop styles */
+    .column-item {
+      transition: all 0.2s;
+    }
+    
+    .column-item.dragging {
+      opacity: 0.5;
+      background-color: var(--hover-bg);
+    }
+    
+    .column-item.drag-over {
+      border-bottom: 2px solid var(--link-color) !important;
+    }
+    
+    .drag-handle {
+      cursor: grab;
+    }
+    
+    .column-name-input {
+      background-color: var(--control-bg);
+      color: var(--text-color);
+      border-color: var(--border-color);
+    }
+    
+    .column-name-input:focus {
+      background-color: var(--input-focus-bg, var(--control-bg));
+      color: var(--text-color);
+      border-color: var(--link-color);
+      box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    }
+    
+    .column-list {
+      max-height: 250px;
+      overflow-y: auto;
+      border-top: 1px solid var(--border-color);
+      margin-top: 0.5rem;
+    }
     
     .slider .icons {
       display: flex;
@@ -561,8 +597,7 @@
       border-color: #0d6efd;
       color: white;
     }
-    
-    [data-theme="dark"] .text-muted {
+      [data-theme="dark"] .text-muted {
       color: #adb5bd !important;
     }
   </style>

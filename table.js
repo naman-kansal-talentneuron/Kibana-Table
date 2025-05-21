@@ -8,6 +8,9 @@ let sortColumn = '';
 let sortDirection = 'asc';
 let visibleColumns = new Set();
 let allColumns = [];
+let originalColumns = []; // Store original column order
+let columnMappings = {}; // Map original column names to custom names
+let columnOrder = []; // Current order of columns
 let currentTheme = 'dark'; // Default theme is dark
 
 // Initialize when the page loads
@@ -571,31 +574,104 @@ function flattenObject(obj, prefix = '') {
   return flattened;
 }
 
-// Identify all columns from the data
+// Identify columns in the data
 function identifyColumns() {
+  // Clear existing columns
   allColumns = [];
-  const columnsSet = new Set();
   
-  tableData.forEach(row => {
-    Object.keys(row).forEach(key => {
-      columnsSet.add(key);
+  // Extract column names from the data
+  if (tableData && tableData.length > 0) {
+    // Get all unique keys from all rows
+    const columnSet = new Set();
+    tableData.forEach(row => {
+      Object.keys(row).forEach(key => {
+        columnSet.add(key);
+      });
     });
-  });
+    
+    // Convert Set to Array
+    allColumns = Array.from(columnSet);
+  }
   
-  allColumns = Array.from(columnsSet);
+  // Initialize column related variables
+  if (originalColumns.length === 0) {
+    originalColumns = [...allColumns];
+  }
+
+  if (columnOrder.length === 0) {
+    columnOrder = [...allColumns];
+  }
+
+  // Try to load saved column customizations
+  loadColumnCustomizations();
+
+  // Initialize column mappings for any new columns
+  allColumns.forEach(column => {
+    if (!columnMappings[column]) {
+      columnMappings[column] = column;
+    }
+  });
+}
+
+// Load saved column customizations
+function loadColumnCustomizations() {
+  let savedCustomizations;
+  
+  // Try to load from Chrome storage first
+  if (typeof chrome !== 'undefined' && chrome.storage) {
+    chrome.storage.local.get(['columnCustomizations'], function(result) {
+      if (result && result.columnCustomizations) {
+        applyColumnCustomizations(result.columnCustomizations);
+      }
+    });
+  } else {
+    // Fall back to localStorage
+    try {
+      const savedData = localStorage.getItem('kibanaTableColumnCustomizations');
+      if (savedData) {
+        savedCustomizations = JSON.parse(savedData);
+        applyColumnCustomizations(savedCustomizations);
+      }
+    } catch (e) {
+      console.warn("Could not load column customizations from localStorage:", e);
+    }
+  }
+}
+
+// Apply saved column customizations
+function applyColumnCustomizations(customizations) {
+  if (customizations) {
+    // Apply column order if all columns are present
+    if (customizations.columnOrder && Array.isArray(customizations.columnOrder)) {
+      // Check if all columns in the saved order exist in the current data
+      const allColumnsExist = customizations.columnOrder.every(col => allColumns.includes(col));
+      // Only apply if all columns exist, otherwise use default order
+      if (allColumnsExist && customizations.columnOrder.length === allColumns.length) {
+        columnOrder = [...customizations.columnOrder];
+      }
+    }
+    
+    // Apply column mappings (custom names)
+    if (customizations.columnMappings && typeof customizations.columnMappings === 'object') {
+      // Only apply mappings for columns that exist in the current data
+      Object.keys(customizations.columnMappings).forEach(col => {
+        if (allColumns.includes(col)) {
+          columnMappings[col] = customizations.columnMappings[col];
+        }
+      });
+    }
+  }
 }
 
 // Create the column toggle UI
 function createColumnToggleUI() {
   const container = document.getElementById('columnToggle');
-  
-  // Store any existing buttons
-  const existingButtons = container.querySelector('.d-flex');
   container.innerHTML = '';
   
-  // Create buttons at the top and side by side
-  const buttonsDiv = document.createElement('div');
-  buttonsDiv.className = 'd-flex gap-2 mb-2';
+  // --- Top Control Buttons ---
+  // Create selection buttons at the top
+  const selectionButtonsDiv = document.createElement('div');
+  selectionButtonsDiv.className = 'd-flex gap-2 mb-2';
   
   const selectAllBtn = document.createElement('button');
   selectAllBtn.className = 'btn btn-sm btn-outline-primary flex-grow-1';
@@ -611,20 +687,55 @@ function createColumnToggleUI() {
   deselectAllBtn.type = 'button';
   deselectAllBtn.addEventListener('click', deselectAllColumns);
   
-  buttonsDiv.appendChild(selectAllBtn);
-  buttonsDiv.appendChild(deselectAllBtn);
+  selectionButtonsDiv.appendChild(selectAllBtn);
+  selectionButtonsDiv.appendChild(deselectAllBtn);
   
-  // Add buttons to container first
-  container.appendChild(buttonsDiv);
+  // Add selection buttons to container
+  container.appendChild(selectionButtonsDiv);
   
-  // Create a wrapper for the checkboxes
-  const checkboxesDiv = document.createElement('div');
-  checkboxesDiv.style.maxHeight = '250px';
-  checkboxesDiv.style.overflowY = 'auto';
+  // Add reset button for column order
+  const resetButtonDiv = document.createElement('div');
+  resetButtonDiv.className = 'mb-2';
   
-  allColumns.forEach(column => {
-    const div = document.createElement('div');
-    div.className = 'form-check';
+  const resetOrderBtn = document.createElement('button');
+  resetOrderBtn.className = 'btn btn-sm btn-outline-warning w-100';
+  resetOrderBtn.id = 'resetColumnOrder';
+  resetOrderBtn.textContent = 'Reset Column Order';
+  resetOrderBtn.type = 'button';
+  resetOrderBtn.addEventListener('click', resetColumnOrder);
+  
+  resetButtonDiv.appendChild(resetOrderBtn);
+  container.appendChild(resetButtonDiv);
+  
+  // --- Column Item List ---
+  // Create a wrapper for columns with drag handles
+  const columnsDiv = document.createElement('div');
+  columnsDiv.className = 'column-list';
+  columnsDiv.style.maxHeight = '250px';
+  columnsDiv.style.overflowY = 'auto';
+  
+  // Add columns in the current specified order
+  columnOrder.forEach((column, index) => {
+    const columnDiv = document.createElement('div');
+    columnDiv.className = 'column-item d-flex align-items-center border-bottom py-2';
+    columnDiv.dataset.column = column;
+    columnDiv.draggable = true;
+    
+    // Drag events for reordering
+    columnDiv.addEventListener('dragstart', handleDragStart);
+    columnDiv.addEventListener('dragover', handleDragOver);
+    columnDiv.addEventListener('drop', handleDrop);
+    
+    // Create drag handle
+    const dragHandle = document.createElement('div');
+    dragHandle.className = 'drag-handle me-2 text-muted';
+    dragHandle.innerHTML = '<i class="bi bi-grip-vertical"></i>';
+    dragHandle.style.cursor = 'grab';
+    columnDiv.appendChild(dragHandle);
+    
+    // Create visibility checkbox
+    const checkboxDiv = document.createElement('div');
+    checkboxDiv.className = 'form-check me-2';
     
     const input = document.createElement('input');
     input.className = 'form-check-input column-checkbox';
@@ -634,18 +745,32 @@ function createColumnToggleUI() {
     input.dataset.column = column;
     input.addEventListener('change', handleColumnToggle);
     
-    const label = document.createElement('label');
-    label.className = 'form-check-label text-truncate d-block';
-    label.htmlFor = `column-${column}`;
-    label.title = column;
-    label.textContent = column;
+    checkboxDiv.appendChild(input);
+    columnDiv.appendChild(checkboxDiv);
     
-    div.appendChild(input);
-    div.appendChild(label);
-    checkboxesDiv.appendChild(div);
+    // Create column name input (for renaming)
+    const nameInputDiv = document.createElement('div');
+    nameInputDiv.className = 'flex-grow-1';
+    
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'form-control form-control-sm column-name-input';
+    nameInput.value = columnMappings[column] || column;
+    nameInput.placeholder = column;
+    nameInput.dataset.originalColumn = column;
+    nameInput.addEventListener('change', function(e) {
+      handleColumnRename(column, e.target.value);
+    });
+    
+    nameInputDiv.appendChild(nameInput);
+    columnDiv.appendChild(nameInputDiv);
+    
+    // Add column item to the columns div
+    columnsDiv.appendChild(columnDiv);
   });
-    // Add the checkboxes to the container after the buttons
-  container.appendChild(checkboxesDiv);
+  
+  // Add the columns to the container
+  container.appendChild(columnsDiv);
 }
 
 // Event handler for column visibility toggle
@@ -668,6 +793,127 @@ function handleColumnToggle(e) {
   renderTable();
 }
 
+// Handler for column rename
+function handleColumnRename(originalColumn, newName) {
+  if (!newName || newName.trim() === '') {
+    // If empty, revert back to original column name
+    columnMappings[originalColumn] = originalColumn;
+  } else {
+    // Store the custom name mapping
+    columnMappings[originalColumn] = newName.trim();
+  }
+  
+  // Save column mappings to storage
+  saveColumnCustomizations();
+  
+  // Redraw the table with new column names
+  renderTable();
+}
+
+// Drag and drop handlers for column reordering
+let draggedColumn = null;
+
+function handleDragStart(e) {
+  // Store the dragged column
+  draggedColumn = e.target.dataset.column;
+  // Add a visual effect during drag
+  e.target.classList.add('dragging');
+  
+  // Required for Firefox - set data transfer
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', draggedColumn);
+}
+
+function handleDragOver(e) {
+  e.preventDefault(); // Allow the drop
+  e.dataTransfer.dropEffect = 'move';
+  
+  // Add visual indicator for drop position
+  const item = e.target.closest('.column-item');
+  if (item && item.dataset.column !== draggedColumn) {
+    item.classList.add('drag-over');
+  }
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  
+  // Remove the visual effect from all items
+  document.querySelectorAll('.column-item').forEach(item => {
+    item.classList.remove('drag-over');
+    item.classList.remove('dragging');
+  });
+  
+  // Get the target column
+  const dropTarget = e.target.closest('.column-item');
+  if (!dropTarget || !draggedColumn || dropTarget.dataset.column === draggedColumn) {
+    draggedColumn = null;
+    return; // Not a valid drop
+  }
+  
+  const targetColumn = dropTarget.dataset.column;
+  
+  // Reorder the columnOrder array
+  const draggedIndex = columnOrder.indexOf(draggedColumn);
+  const targetIndex = columnOrder.indexOf(targetColumn);
+  
+  if (draggedIndex !== -1 && targetIndex !== -1) {
+    // Remove the dragged column
+    columnOrder.splice(draggedIndex, 1);
+    // Insert it at the new position
+    columnOrder.splice(targetIndex, 0, draggedColumn);
+    
+    // Save the new column order
+    saveColumnCustomizations();
+    
+    // Rebuild the column toggle UI and redraw the table
+    createColumnToggleUI();
+    renderTable();
+  }
+  
+  draggedColumn = null;
+}
+
+// Reset column order to original
+function resetColumnOrder() {
+  // Ask for confirmation
+  if (confirm('Are you sure you want to reset the column order to default?')) {
+    // Reset column order to original
+    columnOrder = [...originalColumns];
+    // Reset column names to original
+    originalColumns.forEach(column => {
+      columnMappings[column] = column;
+    });
+    
+    // Save the reset customizations
+    saveColumnCustomizations();
+    
+    // Rebuild the column toggle UI and redraw the table
+    createColumnToggleUI();
+    renderTable();
+  }
+}
+
+// Save column customizations to storage
+function saveColumnCustomizations() {
+  const columnCustomizations = {
+    columnOrder: columnOrder,
+    columnMappings: columnMappings
+  };
+  
+  // Try to save in Chrome storage first
+  if (typeof chrome !== 'undefined' && chrome.storage) {
+    chrome.storage.local.set({ columnCustomizations: columnCustomizations });
+  } else {
+    // Fall back to localStorage
+    try {
+      localStorage.setItem('kibanaTableColumnCustomizations', JSON.stringify(columnCustomizations));
+    } catch (e) {
+      console.warn("Could not save column customizations to localStorage:", e);
+    }
+  }
+}
+
 // Update the createTableHeader function to improve display
 function createTableHeader(columns) {
   const thead = document.createElement('thead');
@@ -676,13 +922,17 @@ function createTableHeader(columns) {
   columns.forEach(column => {
     const th = document.createElement('th');
     
-    // Create a text node for the column name (without space)
-    const textNode = document.createTextNode(column);
+    // Use the custom column name if available, otherwise use original
+    const columnDisplayName = columnMappings[column] || column;
+    
+    // Create a text node for the column name
+    const textNode = document.createTextNode(columnDisplayName);
     th.appendChild(textNode);
-      // Add sort indicator span with the appropriate icon
+    
+    // Add sort indicator span with the appropriate icon
     const sortIndicator = document.createElement('span');
     sortIndicator.className = 'sort-indicator';
-      // Set initial icon state based on current sort
+    // Set initial icon state based on current sort
     if (sortColumn === column) {
       sortIndicator.classList.add('text-primary'); // Use Bootstrap class for active sort
       if (sortDirection === 'asc') {
@@ -822,7 +1072,8 @@ function renderTable() {
   table.className = 'table table-hover';
   
   // Add table header
-  const visibleColumnsArray = Array.from(visibleColumns);
+  // Get visible columns in the correct order
+  const visibleColumnsArray = columnOrder.filter(column => visibleColumns.has(column));
   const thead = createTableHeader(visibleColumnsArray);
   table.appendChild(thead);
   

@@ -27,7 +27,10 @@ document.addEventListener('DOMContentLoaded', function() {
   // Add debug features
   addDebugFeatures();
   
-  // Load data
+  // COMMENTED OUT: We don't want sample data in production
+  // createSampleData();
+  
+  // Load real data instead
   loadData();
 });
 
@@ -99,42 +102,33 @@ function loadData() {
   showLoading(true);
   
   try {
-    // First check if chrome API is available
-    if (typeof chrome === 'undefined' || !chrome.storage) {
-      console.warn("Chrome storage API not available");
-      if (!tryLoadFromUrlFragment() && !checkLocalStorage()) {
-        showError("Chrome storage API not available. This extension requires Chrome API access.");
-      }
-      return;
-    }
-    
-    chrome.storage.local.get('kibanaData', function(result) {
-      console.log("Storage get result:", result);
-      
-      if (chrome.runtime.lastError) {
-        console.error("Chrome storage error:", chrome.runtime.lastError);
-        if (!tryLoadFromUrlFragment() && !checkLocalStorage()) {
-          showError(`Error loading data: ${chrome.runtime.lastError.message}`);
-        }
-        return;
-      }
-      
-      if (result && result.kibanaData) {
-        console.log("Got kibana data from storage");
-        kibanaData = result.kibanaData;
-        processData();
-      } else {
-        console.warn("No kibana data found in storage");
-        if (!tryLoadFromUrlFragment() && !checkLocalStorage()) {
+    // In a Chrome extension environment
+    if (typeof chrome !== 'undefined' && chrome.storage) {
+      chrome.storage.local.get(['kibanaData'], function(result) {
+        console.log("Loaded data from Chrome storage:", result);
+        if (result.kibanaData) {
+          kibanaData = result.kibanaData;
+          processData();
+        } else {
+          console.warn("No data found in Chrome storage");
+          // Don't create sample data automatically - show empty state instead
           showEmptyState(true);
           showLoading(false);
         }
+      });
+    } else {
+      // Fallbacks for testing in standalone environment
+      if (!tryLoadFromUrlFragment() && !checkLocalStorage()) {
+        console.warn("No data found in URL or localStorage");
+        showEmptyState(true);
+        showLoading(false);
       }
-    });
+    }
   } catch (e) {
-    console.error("Exception during storage access:", e);
+    console.error("Error loading data:", e);
     if (!tryLoadFromUrlFragment() && !checkLocalStorage()) {
-      showError(`Failed to load data: ${e.message}`);
+      showError("Failed to load data: " + e.message);
+      showLoading(false);
     }
   }
 }
@@ -208,37 +202,180 @@ function tryLoadFromUrlFragment() {
 
 // Process loaded data
 function processData() {
-  if (!kibanaData) {
-    showEmptyState(true);
+  try {
+    if (!kibanaData) {
+      showEmptyState(true);
+      showLoading(false);
+      return;
+    }
+    
+    console.log("Processing data:", kibanaData);
+    
+    // Process the JSON data and convert it to table format
+    tableData = transformToTableData(kibanaData);
+    console.log("Transformed data:", tableData);
+    
+    if (tableData.length === 0) {
+      console.warn("No rows in tableData after transformation");
+      showEmptyState(true);
+      showLoading(false);
+      return;
+    }
+    
+    // Identify all columns from the data
+    identifyColumns();
+    console.log("Identified columns:", allColumns);
+    
+    // Initialize visibility for all columns (all visible by default)
+    visibleColumns = new Set(allColumns);
+    
+    // Create column toggle UI - Wrap in try/catch to handle potential CORS errors
+    try {
+      createColumnToggleUI();
+    } catch (e) {
+      console.warn("Error creating column toggle UI:", e);
+      // Continue with rendering even if toggle UI fails
+    }
+    
+    // Apply initial filtering and sorting
+    filteredData = [...tableData];
+    
+    // Render the table
+    console.log("Rendering table with", filteredData.length, "rows");
+    renderTable();
+    renderPagination();
     showLoading(false);
-    return;
+  } catch (error) {
+    console.error("Error in processData:", error);
+    
+    // More user-friendly error message for security errors
+    if (error.name === "SecurityError") {
+      showError("Security error: This is likely due to browser security restrictions. Try using the extension in a regular Chrome tab.");
+    } else if (error.name === "DOMException" && error.message.includes("cssRules")) {
+      showError("Security restriction: Cannot access CSS rules. Using fallback styles.");
+      // Continue with table rendering using basic styles
+      try {
+        renderTableWithFallbackStyles();
+      } catch (e) {
+        showError("Failed to render table: " + e.message);
+      }
+    } else {
+      showError("Failed to process data: " + error.message);
+    }
+  }
+}
+
+// Add this fallback rendering function
+function renderTableWithFallbackStyles() {
+  // Basic table rendering without fancy styling
+  const container = document.getElementById('tableContainer');
+  
+  // Clear container first
+  if (container) {
+    container.innerHTML = '';
+    
+    // Create a basic table
+    const table = document.createElement('table');
+    table.style.width = '100%';
+    table.style.borderCollapse = 'collapse';
+    table.style.marginTop = '10px';
+    
+    // Create header row
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    
+    // Add headers
+    const visibleColumnsArray = Array.from(visibleColumns);
+    visibleColumnsArray.forEach(column => {
+      const th = document.createElement('th');
+      th.textContent = column;
+      th.style.padding = '8px';
+      th.style.borderBottom = '2px solid #ddd';
+      th.style.textAlign = 'left';
+      th.style.fontWeight = 'bold';
+      headerRow.appendChild(th);
+    });
+    
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+    
+    // Create table body
+    const tbody = document.createElement('tbody');
+    
+    // Add data rows
+    const start = (currentPage - 1) * rowsPerPage;
+    const end = start + rowsPerPage;
+    const visibleData = filteredData.slice(start, end);
+    
+    visibleData.forEach(row => {
+      const tr = document.createElement('tr');
+      
+      visibleColumnsArray.forEach(column => {
+        const td = document.createElement('td');
+        td.textContent = formatCellValue(row[column] || '');
+        td.style.padding = '8px';
+        td.style.borderBottom = '1px solid #ddd';
+        tr.appendChild(td);
+      });
+      
+      tbody.appendChild(tr);
+    });
+    
+    table.appendChild(tbody);
+    container.appendChild(table);
+    
+    // Add basic pagination
+    renderBasicPagination();
+  }
+}
+
+function renderBasicPagination() {
+  const paginationContainer = document.getElementById('pagination');
+  if (!paginationContainer) return;
+  
+  paginationContainer.innerHTML = '';
+  
+  if (filteredData.length <= rowsPerPage) return;
+  
+  const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+  
+  const nav = document.createElement('div');
+  nav.style.marginTop = '10px';
+  nav.style.textAlign = 'center';
+  
+  // Previous button
+  if (currentPage > 1) {
+    const prevBtn = document.createElement('button');
+    prevBtn.textContent = 'Previous';
+    prevBtn.style.margin = '0 5px';
+    prevBtn.style.padding = '5px 10px';
+    prevBtn.addEventListener('click', () => {
+      currentPage--;
+      renderTableWithFallbackStyles();
+    });
+    nav.appendChild(prevBtn);
   }
   
-  // Process the JSON data and convert it to table format
-  tableData = transformToTableData(kibanaData);
+  // Page indicator
+  const pageInfo = document.createElement('span');
+  pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+  pageInfo.style.margin = '0 10px';
+  nav.appendChild(pageInfo);
   
-  if (tableData.length === 0) {
-    showEmptyState(true);
-    showLoading(false);
-    return;
+  // Next button
+  if (currentPage < totalPages) {
+    const nextBtn = document.createElement('button');
+    nextBtn.textContent = 'Next';
+    nextBtn.style.margin = '0 5px';
+    nextBtn.style.padding = '5px 10px';
+    nextBtn.addEventListener('click', () => {
+      currentPage++;
+      renderTableWithFallbackStyles();
+    });
+    nav.appendChild(nextBtn);
   }
   
-  // Identify all columns from the data
-  identifyColumns();
-  
-  // Initialize visibility for all columns (all visible by default)
-  visibleColumns = new Set(allColumns);
-  
-  // Create column toggle UI
-  createColumnToggleUI();
-  
-  // Apply initial filtering and sorting
-  filteredData = [...tableData];
-  
-  // Render the table
-  renderTable();
-  renderPagination();
-  showLoading(false);
+  paginationContainer.appendChild(nav);
 }
 
 // Transform Kibana JSON data into table format
@@ -534,38 +671,142 @@ function handleColumnToggle(e) {
   renderTable();
 }
 
-// Handle sorting of the table
+// Update the createTableHeader function to improve display
+function createTableHeader(columns) {
+  const thead = document.createElement('thead');
+  const tr = document.createElement('tr');
+  
+  columns.forEach(column => {
+    const th = document.createElement('th');
+    
+    // Create a text node for the column name (without space)
+    const textNode = document.createTextNode(column);
+    th.appendChild(textNode);
+    
+    // Add sort indicator span with the appropriate icon
+    const sortIndicator = document.createElement('span');
+    sortIndicator.className = 'sort-indicator';
+    sortIndicator.style.marginLeft = '5px';
+    
+    // Set initial icon state based on current sort
+    if (sortColumn === column) {
+      sortIndicator.style.color = '#0d6efd'; // Blue color for active sort
+      if (sortDirection === 'asc') {
+        sortIndicator.textContent = getSortIcon('asc');
+        sortIndicator.title = "Sorted ascending (A to Z, low to high)";
+      } else if (sortDirection === 'desc') {
+        sortIndicator.textContent = getSortIcon('desc');
+        sortIndicator.title = "Sorted descending (Z to A, high to low)";
+      }
+    } else {
+      // Default state (no sorting) - make it lighter gray
+      sortIndicator.textContent = getSortIcon('default');
+      sortIndicator.title = "Click to sort";
+      sortIndicator.style.color = '#999';
+    }
+    
+    th.appendChild(sortIndicator);
+    th.addEventListener('click', () => handleSort(column));
+    tr.appendChild(th);
+  });
+  
+  thead.appendChild(tr);
+  return thead;
+}
+
+// Update the sorting handler function to cycle through three states
 function handleSort(column) {
-  // If same column, toggle direction; otherwise set new column with default asc
-  if (sortColumn === column) {
-    sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-  } else {
+  // Initialize sortColumn and sortDirection if this is the first time
+  if (!sortColumn) sortColumn = '';
+  if (!sortDirection) sortDirection = '';
+  
+  // Cycle through the three states: default -> asc -> desc -> default
+  if (sortColumn !== column) {
+    // New column: start with ascending sort
     sortColumn = column;
     sortDirection = 'asc';
+  } else {
+    // Same column: cycle through states
+    if (sortDirection === 'asc') {
+      sortDirection = 'desc';
+    } else if (sortDirection === 'desc') {
+      // Reset to default (unsorted) state
+      sortColumn = '';
+      sortDirection = '';
+    } else {
+      // Default to ascending if in an unknown state
+      sortDirection = 'asc';
+    }
   }
   
-  // Sort the data
-  filteredData.sort((a, b) => {
-    const valA = a[column] !== undefined ? a[column] : '';
-    const valB = b[column] !== undefined ? b[column] : '';
-    
-    // Handle numeric values
-    if (!isNaN(valA) && !isNaN(valB)) {
-      return sortDirection === 'asc' 
-        ? Number(valA) - Number(valB) 
-        : Number(valB) - Number(valA);
-    }
-    
-    // Handle string values
-    const strA = String(valA).toLowerCase();
-    const strB = String(valB).toLowerCase();
-    
-    if (sortDirection === 'asc') {
-      return strA.localeCompare(strB);
-    } else {
-      return strB.localeCompare(strA);
+  // Update all sort indicators
+  const headers = document.querySelectorAll('th');
+  headers.forEach(th => {
+    const sortIndicator = th.querySelector('.sort-indicator');
+    if (sortIndicator) {
+      // Clear any existing sort classes
+      sortIndicator.classList.remove('text-primary');
+      
+      if (sortColumn && th.textContent.includes(sortColumn)) {
+        // Highlight active sort column
+        sortIndicator.classList.add('text-primary');
+        
+        // Set the appropriate icon based on sort direction
+        if (sortDirection === 'asc') {
+          sortIndicator.innerHTML = getSortIcon('asc');
+          sortIndicator.title = "Sorted ascending (A to Z, low to high)";
+        } else if (sortDirection === 'desc') {
+          sortIndicator.innerHTML = getSortIcon('desc');
+          sortIndicator.title = "Sorted descending (Z to A, high to low)";
+        } else {
+          // Fallback, though this shouldn't happen with the new logic
+          sortIndicator.innerHTML = getSortIcon('default');
+          sortIndicator.title = "Click to sort";
+        }
+      } else {
+        // Reset other columns or unsorted state to the default icon
+        sortIndicator.innerHTML = getSortIcon('default');
+        sortIndicator.title = "Click to sort";
+      }
     }
   });
+  
+  // Perform the actual sorting if we have a sort column
+  if (sortColumn) {
+    filteredData.sort((a, b) => {
+      const valA = a[sortColumn] !== undefined ? a[sortColumn] : '';
+      const valB = b[sortColumn] !== undefined ? b[sortColumn] : '';
+      
+      // Handle numeric values
+      if (!isNaN(valA) && !isNaN(valB)) {
+        return sortDirection === 'asc' 
+          ? Number(valA) - Number(valB) 
+          : Number(valB) - Number(valA);
+      }
+      
+      // Handle string values
+      const strA = String(valA).toLowerCase();
+      const strB = String(valB).toLowerCase();
+      
+      if (sortDirection === 'asc') {
+        return strA.localeCompare(strB);
+      } else {
+        return strB.localeCompare(strA);
+      }
+    });
+  } else {
+    // If no sorting, restore original order
+    filteredData = [...tableData].filter(row => {
+      // Apply any current search filter
+      const searchTerm = document.getElementById('searchInput')?.value?.toLowerCase() || '';
+      if (!searchTerm) return true;
+      
+      return Object.values(row).some(value => {
+        const strValue = String(value).toLowerCase();
+        return strValue.includes(searchTerm);
+      });
+    });
+  }
   
   // Reset to first page
   currentPage = 1;
@@ -579,9 +820,16 @@ function handleSort(column) {
 function renderTable() {
   const container = document.getElementById('tableContainer');
   if (!container) {
-    console.error("Table container not found");
+    console.error("Table container not found - no element with ID 'tableContainer'");
+    // Try to create it as a fallback
+    const mainContainer = document.querySelector('.container-fluid') || document.body;
+    const newContainer = document.createElement('div');
+    newContainer.id = 'tableContainer';
+    mainContainer.appendChild(newContainer);
     return;
   }
+  
+  console.log("Rendering table with", filteredData.length, "rows and", visibleColumns.size, "visible columns");
   
   // Calculate pagination
   const start = rowsPerPage === -1 ? 0 : (currentPage - 1) * rowsPerPage;
@@ -593,31 +841,7 @@ function renderTable() {
   table.className = 'table table-hover table-bordered';
   
   // Create header
-  const thead = document.createElement('thead');
-  thead.className = 'table-light';
-  const headerRow = document.createElement('tr');
-  
-  // Only show visible columns and create headers
-  allColumns
-    .filter(column => visibleColumns.has(column))
-    .forEach(column => {
-      const th = document.createElement('th');
-      th.textContent = column;
-      th.dataset.column = column;
-      th.addEventListener('click', () => handleSort(column));
-      
-      // Add sort indicator if this column is sorted
-      if (sortColumn === column) {
-        const indicator = document.createElement('span');
-        indicator.className = 'sort-indicator ms-1';
-        indicator.innerHTML = sortDirection === 'asc' ? '▲' : '▼';
-        th.appendChild(indicator);
-      }
-      
-      headerRow.appendChild(th);
-    });
-  
-  thead.appendChild(headerRow);
+  const thead = createTableHeader(allColumns.filter(column => visibleColumns.has(column)));
   table.appendChild(thead);
   
   // Create body
@@ -964,17 +1188,20 @@ function showEmptyState(show) {
   const emptyState = document.getElementById('emptyState');
   const tableContainer = document.getElementById('tableContainer');
   
+  if (!emptyState) {
+    // Create empty state if it doesn't exist
+    const newEmptyState = document.createElement('div');
+    newEmptyState.id = 'emptyState';
+    newEmptyState.className = 'alert alert-warning mt-3';
+    newEmptyState.innerHTML = '<p>No data available. Please paste JSON data in the extension popup and click "Parse JSON".</p>';
+    
+    // Insert after table container
+    tableContainer.parentNode.insertBefore(newEmptyState, tableContainer.nextSibling);
+  }
+  
   if (emptyState && tableContainer) {
     emptyState.style.display = show ? 'block' : 'none';
     tableContainer.style.display = show ? 'none' : 'block';
-    
-    // Update the empty state message
-    if (show) {
-      const messageEl = emptyState.querySelector('p');
-      if (messageEl) {
-        messageEl.textContent = 'No data available. Please paste JSON data in the extension popup and click "Parse JSON".';
-      }
-    }
   }
 }
 
@@ -1063,4 +1290,17 @@ function createSampleData() {
   };
   
   processData();
+}
+
+// Update the getSortIcon function to use cleaner Unicode characters
+function getSortIcon(type) {
+  // Always use Unicode characters for better compatibility
+  switch (type) {
+    case 'asc':
+      return '▲'; // Solid up triangle
+    case 'desc':
+      return '▼'; // Solid down triangle
+    default:
+      return '⇵'; // Up-down arrow (more compact than the current one)
+  }
 }

@@ -20,15 +20,29 @@ document.addEventListener('DOMContentLoaded', function() {
   // Initialize Bootstrap dropdowns
   initializeBootstrapComponents();
   
-  // Set up event listeners
-  document.getElementById('searchInput').addEventListener('input', handleSearch);
-  document.getElementById('rowsPerPage').addEventListener('change', handleRowsPerPageChange);
-  document.getElementById('exportCsvBtn').addEventListener('click', handleExportCsv);
-  document.getElementById('copyCsvBtn').addEventListener('click', handleCopyCsv);
-  document.getElementById('exportTsvBtn').addEventListener('click', handleExportTsv);
-  document.getElementById('copyTsvBtn').addEventListener('click', handleCopyTsv);
-  document.getElementById('exportExcelBtn').addEventListener('click', handleExportExcel);  document.getElementById('selectAllColumns').addEventListener('click', selectAllColumns);
-  document.getElementById('deselectAllColumns').addEventListener('click', deselectAllColumns);
+  // Set up window resize handler for responsive dropdowns
+  window.addEventListener('resize', adjustDropdownWidths);
+  
+  // Set up event listeners for controls
+  const setupEventListener = (id, eventType, handler) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.addEventListener(eventType, handler);
+    } else {
+      console.warn(`Element ${id} not found`);
+    }
+  };
+
+  setupEventListener('searchInput', 'input', handleSearch);
+  setupEventListener('rowsPerPage', 'change', handleRowsPerPageChange);
+  setupEventListener('exportCsvBtn', 'click', handleExportCsv);
+  setupEventListener('copyCsvBtn', 'click', handleCopyCsv);
+  setupEventListener('exportTsvBtn', 'click', handleExportTsv);
+  setupEventListener('copyTsvBtn', 'click', handleCopyTsv);
+  setupEventListener('exportExcelBtn', 'click', handleExportExcel);
+  
+  // Note: selectAllColumns and deselectAllColumns buttons are created dynamically
+  // and their event handlers are attached in the createColumnToggleUI function
   
   // Setup theme toggle
   document.getElementById('themeToggle').addEventListener('change', handleThemeToggle);
@@ -59,16 +73,47 @@ function initializeBootstrapComponents() {
   // We're relying on bootstrap-fallback.js to handle loading Bootstrap
   // or providing a fallback implementation
   initCustomDropdowns();
+  
+  // Adjust dropdown widths after initialization
+  setTimeout(adjustDropdownWidths, 0);
 }
 
 // Initialize Bootstrap dropdowns if Bootstrap is available
 function initDropdowns() {
   if (typeof bootstrap !== 'undefined') {
     try {
-      const dropdownElementList = document.querySelectorAll('[data-bs-toggle="dropdown"]');
-      dropdownElementList.forEach(function(dropdownToggleEl) {
-        new bootstrap.Dropdown(dropdownToggleEl);
+      // First ensure all dropdowns are closed to start with a clean state
+      document.querySelectorAll('.dropdown-menu').forEach(function(menu) {
+        menu.classList.remove('show');
       });
+      
+      const dropdownElementList = document.querySelectorAll('[data-bs-toggle="dropdown"]');
+      const dropdownList = [];
+      
+      dropdownElementList.forEach(function(dropdownToggleEl) {
+        // Make sure dropdown is not showing by default
+        const dropdown = dropdownToggleEl.closest('.dropdown');
+        if (dropdown) {
+          const dropdownMenu = dropdown.querySelector('.dropdown-menu');
+          if (dropdownMenu && dropdownMenu.classList.contains('show')) {
+            dropdownMenu.classList.remove('show');
+          }
+        }
+        
+        // Initialize Bootstrap dropdown
+        const dropdownInstance = new bootstrap.Dropdown(dropdownToggleEl);
+        dropdownList.push(dropdownInstance);
+          // Add extra handler for toggle columns button specifically
+        if (dropdownToggleEl.id === 'toggleColumnsBtn') {
+          dropdownToggleEl.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            // Use our consistent toggle function
+            toggleDropdownMenu(this);
+          });
+        }
+      });
+      
       console.log("Bootstrap dropdowns initialized");
     } catch (e) {
       console.error("Error initializing Bootstrap dropdowns:", e);
@@ -82,29 +127,116 @@ function initDropdowns() {
 // Fallback custom dropdown implementation
 function initCustomDropdowns() {
   console.log("Using custom dropdown implementation");
+  
+  // Hide all dropdown menus by default
+  document.querySelectorAll('.dropdown-menu').forEach(function(menu) {
+    menu.classList.remove('show');
+  });
+  
+  // Track which toggle button was clicked last
+  let lastClickedToggle = null;
+  
   document.querySelectorAll('[data-bs-toggle="dropdown"]').forEach(function(element) {
     element.addEventListener('click', function(e) {
       e.preventDefault();
-      e.stopPropagation();
-      const dropdownMenu = this.nextElementSibling;
+      
+      // Find the closest dropdown parent to handle nested structures
+      const dropdown = this.closest('.dropdown');
+      if (!dropdown) return;
+      
+      // Find the dropdown menu within this dropdown container
+      const dropdownMenu = dropdown.querySelector('.dropdown-menu');
+      if (!dropdownMenu) return;
+      
+      // Store if this was a toggle button click
+      const wasToggleButtonClick = true;
+      lastClickedToggle = this;
+      
+      // Toggle this dropdown
       if (dropdownMenu.classList.contains('show')) {
         dropdownMenu.classList.remove('show');
       } else {
-        // Hide any open dropdowns
+        // Hide any open dropdowns first
         document.querySelectorAll('.dropdown-menu.show').forEach(function(menu) {
           menu.classList.remove('show');
         });
+        // Then show this dropdown
         dropdownMenu.classList.add('show');
       }
+      
+      // Stop propagation but only for the toggle action
+      e.stopPropagation();
     });
   });
-  
-  // Close dropdowns when clicking outside
+    // Close dropdowns when clicking outside
   document.addEventListener('click', function(e) {
-    if (!e.target.closest('.dropdown')) {
+    // If the click was on a toggle button, we already handled it above
+    if (e.target === lastClickedToggle || e.target.closest('button') === lastClickedToggle) {
+      return;
+    }
+    
+    // Close dropdown if click is outside the dropdown content
+    if (!e.target.closest('.dropdown-menu')) {
       document.querySelectorAll('.dropdown-menu.show').forEach(function(menu) {
         menu.classList.remove('show');
       });
+      // Reset last clicked toggle
+      lastClickedToggle = null;
+    }
+  });
+  
+  // Close dropdowns when pressing Escape key
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.dropdown-menu.show').forEach(function(menu) {
+        menu.classList.remove('show');
+      });
+      lastClickedToggle = null;
+    }
+  });
+}
+
+// Helper function to toggle a dropdown menu programmatically
+function toggleDropdownMenu(toggleButton) {
+  const dropdown = toggleButton.closest('.dropdown');
+  if (!dropdown) return;
+  
+  const dropdownMenu = dropdown.querySelector('.dropdown-menu');
+  if (!dropdownMenu) return;
+  
+  if (dropdownMenu.classList.contains('show')) {
+    dropdownMenu.classList.remove('show');
+  } else {
+    // Close all other open dropdowns first
+    document.querySelectorAll('.dropdown-menu.show').forEach(menu => {
+      if (menu !== dropdownMenu) {
+        menu.classList.remove('show');
+      }
+    });
+    dropdownMenu.classList.add('show');
+  }
+}
+
+// Ensure dropdown width matches toggle button width
+function adjustDropdownWidths() {
+  // Specifically for the column toggle dropdown
+  const toggleButton = document.getElementById('toggleColumnsBtn');
+  const columnToggle = document.getElementById('columnToggle');
+  
+  if (toggleButton && columnToggle) {
+    // Set the dropdown width to match the button width
+    const buttonWidth = toggleButton.offsetWidth;
+    columnToggle.style.width = `${buttonWidth}px`;
+  }
+  
+  // Apply to all dropdowns if needed in the future
+  document.querySelectorAll('.dropdown').forEach(dropdown => {
+    const button = dropdown.querySelector('.dropdown-toggle');
+    const menu = dropdown.querySelector('.dropdown-menu');
+    
+    if (button && menu && !menu.id) {  // Skip any that already have specific handling
+      const buttonWidth = button.offsetWidth;
+      menu.style.width = `${buttonWidth}px`;
     }
   });
 }
@@ -127,13 +259,12 @@ function loadData() {
         showEmptyState(true);
         showLoading(false);
       }
-    });
-  } else {
+    });  } else {
     // Fallback for non-extension environments
     if (!tryLoadFromUrlFragment() && !checkLocalStorage()) {
-      console.warn("No data sources available");
-      showEmptyState(true);
-      showLoading(false);
+      console.warn("No data sources available, creating sample data");
+      // Create sample data for standalone mode
+      createSampleData();
     }
   }
 }
@@ -667,6 +798,9 @@ function applyColumnCustomizations(customizations) {
 function createColumnToggleUI() {
   const container = document.getElementById('columnToggle');
   container.innerHTML = '';
+    // Create a fixed button container for all controls
+  const buttonContainer = document.createElement('div');
+  buttonContainer.className = 'button-container';
   
   // --- Top Control Buttons ---
   // Create selection buttons at the top
@@ -690,8 +824,8 @@ function createColumnToggleUI() {
   selectionButtonsDiv.appendChild(selectAllBtn);
   selectionButtonsDiv.appendChild(deselectAllBtn);
   
-  // Add selection buttons to container
-  container.appendChild(selectionButtonsDiv);
+  // Add selection buttons to the button container
+  buttonContainer.appendChild(selectionButtonsDiv);
   
   // Add reset button for column order
   const resetButtonDiv = document.createElement('div');
@@ -705,14 +839,16 @@ function createColumnToggleUI() {
   resetOrderBtn.addEventListener('click', resetColumnOrder);
   
   resetButtonDiv.appendChild(resetOrderBtn);
-  container.appendChild(resetButtonDiv);
+  buttonContainer.appendChild(resetButtonDiv);
+  
+  // Add the button container to the main container
+  container.appendChild(buttonContainer);
   
   // --- Column Item List ---
   // Create a wrapper for columns with drag handles
   const columnsDiv = document.createElement('div');
   columnsDiv.className = 'column-list';
-  columnsDiv.style.maxHeight = '250px';
-  columnsDiv.style.overflowY = 'auto';
+  // No need to set inline styles as they are now in CSS
   
   // Add columns in the current specified order
   columnOrder.forEach((column, index) => {
@@ -1595,7 +1731,28 @@ function deselectAllColumns() {
 
 // Show/hide loading overlay
 function showLoading(show) {
-  document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  if (loadingOverlay) {
+    loadingOverlay.style.display = show ? 'flex' : 'none';
+  }
+  
+  // If showing loading, set a safety timeout to hide it after 5 seconds
+  // This prevents infinite loading states
+  if (show) {
+    setTimeout(() => {
+      const overlay = document.getElementById('loadingOverlay');
+      if (overlay && overlay.style.display === 'flex') {
+        console.warn("Loading timeout reached - forcing hide of loading overlay");
+        overlay.style.display = 'none';
+        
+        // If we reached this point, we might need to create sample data
+        if (!kibanaData && !tableData.length) {
+          console.warn("No data after loading timeout - creating sample data");
+          createSampleData();
+        }
+      }
+    }, 5000);
+  }
 }
 
 // Show/hide empty state
@@ -1705,6 +1862,9 @@ function addDebugFeatures() {
 
 // Create sample data for testing
 function createSampleData() {
+  console.log("Creating sample data");
+  
+  // Create more comprehensive sample data with different types
   kibanaData = {
     "hits": {
       "hits": [
@@ -1715,6 +1875,8 @@ function createSampleData() {
           "_source": {
             "field1": "Sample Value 1",
             "field2": 123,
+            "date_field": "2023-01-15",
+            "boolean_field": true,
             "nested": { "value": "test" }
           }
         },
@@ -1725,6 +1887,8 @@ function createSampleData() {
           "_source": {
             "field1": "Sample Value 2",
             "field2": 456,
+            "date_field": "2023-02-20",
+            "boolean_field": false,
             "nested": { "value": "test2" }
           }
         },
@@ -1735,16 +1899,38 @@ function createSampleData() {
           "_source": {
             "field1": "Sample Value 3",
             "field2": 789,
+            "date_field": "2023-03-25",
+            "boolean_field": true,
             "nested": { "value": "test3" }
+          }
+        },
+        {
+          "_id": "sample4",
+          "_index": "test-index",
+          "_score": 1.0,
+          "_source": {
+            "field1": "Sample Value 4",
+            "field2": 1011,
+            "date_field": "2023-04-30",
+            "boolean_field": false,
+            "nested": { "value": "test4" }
           }
         }
       ],
       "total": {
-        "value": 3
+        "value": 4
       }
     }
   };
   
+  // Save to localStorage for future sessions
+  try {
+    localStorage.setItem('kibanaData', JSON.stringify(kibanaData));
+  } catch (e) {
+    console.warn("Failed to save sample data to localStorage:", e);
+  }
+  
+  // Process the data
   processData();
 }
 
@@ -1764,34 +1950,46 @@ function getSortIcon(type) {
 // Initialize theme based on saved preference or default to dark mode
 function initializeTheme() {
   // Try to get saved preference or default to dark mode
-  let savedTheme;
+  let savedTheme = 'dark'; // Default to dark
+
+  // Immediately apply default theme to avoid flashing
+  applyTheme(savedTheme);
   
-  // Check for Chrome storage first
+  // Set toggle state initially
+  const themeToggle = document.getElementById('themeToggle');
+  if (themeToggle) {
+    themeToggle.checked = true; // Default to checked (dark mode)
+  }
+  
+  // Then try to load saved preferences
   if (typeof chrome !== 'undefined' && chrome.storage) {
     chrome.storage.local.get(['theme'], function(result) {
-      savedTheme = result.theme || 'dark';
-      applyTheme(savedTheme);
-      
-      // Update toggle switch state
-      const themeToggle = document.getElementById('themeToggle');
-      if (themeToggle) {
-        themeToggle.checked = savedTheme === 'dark';
+      if (result && result.theme) {
+        savedTheme = result.theme;
+        applyTheme(savedTheme);
+        
+        // Update toggle switch state
+        if (themeToggle) {
+          themeToggle.checked = savedTheme === 'dark';
+        }
       }
     });
   } else {
     // Fall back to localStorage
     try {
-      savedTheme = localStorage.getItem('kibanaTableTheme') || 'dark';
-      applyTheme(savedTheme);
-      
-      // Update toggle switch state
-      const themeToggle = document.getElementById('themeToggle');
-      if (themeToggle) {
-        themeToggle.checked = savedTheme === 'dark';
+      const storedTheme = localStorage.getItem('kibanaTableTheme');
+      if (storedTheme) {
+        savedTheme = storedTheme;
+        applyTheme(savedTheme);
+        
+        // Update toggle switch state
+        if (themeToggle) {
+          themeToggle.checked = savedTheme === 'dark';
+        }
       }
     } catch (e) {
       console.warn("Could not access localStorage:", e);
-      applyTheme('dark'); // Default to dark mode
+      // Already applied default dark mode above
     }
   }
 }
@@ -1825,16 +2023,41 @@ function saveThemePreference(theme) {
 
 // Apply theme to document
 function applyTheme(theme) {
+  // Set the data-theme attribute which controls CSS variables
   document.documentElement.setAttribute('data-theme', theme);
   currentTheme = theme;
   
-  // Force re-render the table if it exists
-  if (tableData && tableData.length > 0) {
-    renderTable();
-    renderPagination();
+  // Update theme toggle state if it exists
+  const themeToggle = document.getElementById('themeToggle');
+  if (themeToggle) {
+    themeToggle.checked = theme === 'dark';
   }
   
-  // Apply theme-specific classes to specific elements
+  // Apply theme-specific styles to dropdown menus which might not inherit properly
+  const dropdowns = document.querySelectorAll('.dropdown-menu');
+  dropdowns.forEach(dropdown => {
+    if (theme === 'dark') {
+      dropdown.style.backgroundColor = '#2d2d2d';
+      dropdown.style.borderColor = '#444';
+      dropdown.style.color = '#e0e0e0';
+    } else {
+      dropdown.style.backgroundColor = '';
+      dropdown.style.borderColor = '';
+      dropdown.style.color = '';
+    }
+  });
+  
+  // Apply theme to the loading overlay
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  if (loadingOverlay) {
+    if (theme === 'dark') {
+      loadingOverlay.style.backgroundColor = 'rgba(0,0,0,0.7)';
+    } else {
+      loadingOverlay.style.backgroundColor = 'rgba(255,255,255,0.8)';
+    }
+  }
+  
+  // Also apply to the table container
   const tableContainer = document.querySelector('.table-container');
   if (tableContainer) {
     if (theme === 'dark') {
@@ -1842,5 +2065,11 @@ function applyTheme(theme) {
     } else {
       tableContainer.classList.remove('table-dark');
     }
+  }
+  
+  // Force re-render the table if it exists
+  if (tableData && tableData.length > 0) {
+    renderTable();
+    renderPagination();
   }
 }

@@ -20,6 +20,9 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('searchInput').addEventListener('input', handleSearch);
   document.getElementById('rowsPerPage').addEventListener('change', handleRowsPerPageChange);
   document.getElementById('exportCsvBtn').addEventListener('click', handleExportCsv);
+  document.getElementById('copyCsvBtn').addEventListener('click', handleCopyCsv);
+  document.getElementById('exportTsvBtn').addEventListener('click', handleExportTsv);
+  document.getElementById('copyTsvBtn').addEventListener('click', handleCopyTsv);
   document.getElementById('exportExcelBtn').addEventListener('click', handleExportExcel);
   document.getElementById('selectAllColumns').addEventListener('click', selectAllColumns);
   document.getElementById('deselectAllColumns').addEventListener('click', deselectAllColumns);
@@ -100,34 +103,27 @@ function initCustomDropdowns() {
 // Load data from chrome.storage
 function loadData() {
   showLoading(true);
+  console.log("Loading data...");
   
-  try {
-    // In a Chrome extension environment
-    if (typeof chrome !== 'undefined' && chrome.storage) {
-      chrome.storage.local.get(['kibanaData'], function(result) {
-        console.log("Loaded data from Chrome storage:", result);
-        if (result.kibanaData) {
-          kibanaData = result.kibanaData;
-          processData();
-        } else {
-          console.warn("No data found in Chrome storage");
-          // Don't create sample data automatically - show empty state instead
-          showEmptyState(true);
-          showLoading(false);
-        }
-      });
-    } else {
-      // Fallbacks for testing in standalone environment
-      if (!tryLoadFromUrlFragment() && !checkLocalStorage()) {
-        console.warn("No data found in URL or localStorage");
+  // In a Chrome extension environment
+  if (typeof chrome !== 'undefined' && chrome.storage) {
+    console.log("Trying to load from Chrome storage");
+    chrome.storage.local.get(['kibanaData'], function(result) {
+      console.log("Chrome storage result:", result);
+      if (result && result.kibanaData) {
+        kibanaData = result.kibanaData;
+        processData();
+      } else {
+        console.warn("No data found in Chrome storage");
         showEmptyState(true);
         showLoading(false);
       }
-    }
-  } catch (e) {
-    console.error("Error loading data:", e);
+    });
+  } else {
+    // Fallback for non-extension environments
     if (!tryLoadFromUrlFragment() && !checkLocalStorage()) {
-      showError("Failed to load data: " + e.message);
+      console.warn("No data sources available");
+      showEmptyState(true);
       showLoading(false);
     }
   }
@@ -682,27 +678,24 @@ function createTableHeader(columns) {
     // Create a text node for the column name (without space)
     const textNode = document.createTextNode(column);
     th.appendChild(textNode);
-    
-    // Add sort indicator span with the appropriate icon
+      // Add sort indicator span with the appropriate icon
     const sortIndicator = document.createElement('span');
     sortIndicator.className = 'sort-indicator';
-    sortIndicator.style.marginLeft = '5px';
-    
-    // Set initial icon state based on current sort
+      // Set initial icon state based on current sort
     if (sortColumn === column) {
-      sortIndicator.style.color = '#0d6efd'; // Blue color for active sort
+      sortIndicator.classList.add('text-primary'); // Use Bootstrap class for active sort
       if (sortDirection === 'asc') {
-        sortIndicator.textContent = getSortIcon('asc');
+        sortIndicator.innerHTML = getSortIcon('asc');
         sortIndicator.title = "Sorted ascending (A to Z, low to high)";
       } else if (sortDirection === 'desc') {
-        sortIndicator.textContent = getSortIcon('desc');
+        sortIndicator.innerHTML = getSortIcon('desc');
         sortIndicator.title = "Sorted descending (Z to A, high to low)";
       }
     } else {
-      // Default state (no sorting) - make it lighter gray
-      sortIndicator.textContent = getSortIcon('default');
+      // Default state (no sorting)
+      sortIndicator.innerHTML = getSortIcon('default');
       sortIndicator.title = "Click to sort";
-      sortIndicator.style.color = '#999';
+      sortIndicator.style.color = '#6c757d'; // Bootstrap secondary color
     }
     
     th.appendChild(sortIndicator);
@@ -716,62 +709,49 @@ function createTableHeader(columns) {
 
 // Update the sorting handler function to cycle through three states
 function handleSort(column) {
-  // Initialize sortColumn and sortDirection if this is the first time
-  if (!sortColumn) sortColumn = '';
-  if (!sortDirection) sortDirection = '';
-  
-  // Cycle through the three states: default -> asc -> desc -> default
-  if (sortColumn !== column) {
-    // New column: start with ascending sort
-    sortColumn = column;
-    sortDirection = 'asc';
+  // If clicking the same column, toggle direction
+  if (sortColumn === column) {
+    sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
   } else {
-    // Same column: cycle through states
-    if (sortDirection === 'asc') {
-      sortDirection = 'desc';
-    } else if (sortDirection === 'desc') {
-      // Reset to default (unsorted) state
-      sortColumn = '';
-      sortDirection = '';
-    } else {
-      // Default to ascending if in an unknown state
-      sortDirection = 'asc';
-    }
+    sortColumn = column;
+    sortDirection = 'asc'; // Default to ascending when sorting a new column
   }
-  
-  // Update all sort indicators
+    // Update all sort indicators
   const headers = document.querySelectorAll('th');
   headers.forEach(th => {
+    // Remove sorted class from all headers
+    th.classList.remove('sorted');
+    
     const sortIndicator = th.querySelector('.sort-indicator');
     if (sortIndicator) {
       // Clear any existing sort classes
-      sortIndicator.classList.remove('text-primary');
-      
-      if (sortColumn && th.textContent.includes(sortColumn)) {
+      sortIndicator.classList.remove('text-primary');        if (th.textContent.includes(column)) {
         // Highlight active sort column
         sortIndicator.classList.add('text-primary');
+        // Add sorted class to the header
+        th.classList.add('sorted');
         
         // Set the appropriate icon based on sort direction
         if (sortDirection === 'asc') {
-          sortIndicator.innerHTML = getSortIcon('asc');
+          sortIndicator.innerHTML = getSortIcon('asc'); // Using innerHTML for Bootstrap icons
           sortIndicator.title = "Sorted ascending (A to Z, low to high)";
         } else if (sortDirection === 'desc') {
-          sortIndicator.innerHTML = getSortIcon('desc');
+          sortIndicator.innerHTML = getSortIcon('desc'); // Using innerHTML for Bootstrap icons
           sortIndicator.title = "Sorted descending (Z to A, high to low)";
         } else {
           // Fallback, though this shouldn't happen with the new logic
-          sortIndicator.innerHTML = getSortIcon('default');
+          sortIndicator.innerHTML = getSortIcon('default'); // Using innerHTML for Bootstrap icons
           sortIndicator.title = "Click to sort";
-        }
-      } else {
+        }      } else {
         // Reset other columns or unsorted state to the default icon
-        sortIndicator.innerHTML = getSortIcon('default');
+        sortIndicator.innerHTML = getSortIcon('default'); // Using innerHTML for Bootstrap icons
         sortIndicator.title = "Click to sort";
+        sortIndicator.style.color = '#6c757d'; // Bootstrap secondary color
       }
     }
   });
   
-  // Perform the actual sorting if we have a sort column
+  // Perform the actual sorting
   if (sortColumn) {
     filteredData.sort((a, b) => {
       const valA = a[sortColumn] !== undefined ? a[sortColumn] : '';
@@ -820,63 +800,78 @@ function handleSort(column) {
 function renderTable() {
   const container = document.getElementById('tableContainer');
   if (!container) {
-    console.error("Table container not found - no element with ID 'tableContainer'");
-    // Try to create it as a fallback
-    const mainContainer = document.querySelector('.container-fluid') || document.body;
-    const newContainer = document.createElement('div');
-    newContainer.id = 'tableContainer';
-    mainContainer.appendChild(newContainer);
+    console.error("Table container not found");
     return;
   }
   
-  console.log("Rendering table with", filteredData.length, "rows and", visibleColumns.size, "visible columns");
+  container.innerHTML = '';
   
-  // Calculate pagination
-  const start = rowsPerPage === -1 ? 0 : (currentPage - 1) * rowsPerPage;
-  const end = rowsPerPage === -1 ? filteredData.length : start + rowsPerPage;
-  const paginatedData = filteredData.slice(start, end);
+  // Add mobile scroll hint
+  const mobileHint = document.createElement('div');
+  mobileHint.className = 'mobile-hint';
+  mobileHint.textContent = 'Scroll horizontally to see more columns →';
+  container.appendChild(mobileHint);
   
-  // Create table
+  // Create responsive wrapper
+  const responsiveWrapper = document.createElement('div');
+  responsiveWrapper.className = 'table-responsive-wrapper';
+  
+  // Create table with existing code
   const table = document.createElement('table');
-  table.className = 'table table-hover table-bordered';
+  table.className = 'table table-hover';
   
-  // Create header
-  const thead = createTableHeader(allColumns.filter(column => visibleColumns.has(column)));
+  // Add table header
+  const visibleColumnsArray = Array.from(visibleColumns);
+  const thead = createTableHeader(visibleColumnsArray);
   table.appendChild(thead);
   
-  // Create body
+  // Create table body
   const tbody = document.createElement('tbody');
   
-  if (paginatedData.length === 0) {
+  // Calculate pagination
+  const start = (currentPage - 1) * rowsPerPage;
+  const end = Math.min(start + rowsPerPage, filteredData.length);
+  const visibleData = filteredData.slice(start, end);
+  
+  // Add table rows
+  visibleData.forEach(row => {
     const tr = document.createElement('tr');
-    const td = document.createElement('td');
-    td.colSpan = visibleColumns.size;
-    td.className = 'text-center';
-    td.textContent = 'No matching records found';
-    tr.appendChild(td);
-    tbody.appendChild(tr);
-  } else {
-    paginatedData.forEach(row => {
-      const tr = document.createElement('tr');
-      
-      allColumns
-        .filter(column => visibleColumns.has(column))
-        .forEach(column => {
-          const td = document.createElement('td');
-          td.textContent = formatCellValue(row[column]);
-          td.title = formatCellValue(row[column]); // Show full content on hover
-          tr.appendChild(td);
-        });
-      
-      tbody.appendChild(tr);
+    
+    visibleColumnsArray.forEach(column => {
+      const td = document.createElement('td');
+      td.textContent = formatCellValue(row[column] || '');
+      tr.appendChild(td);
     });
-  }
+    
+    tbody.appendChild(tr);
+  });
   
   table.appendChild(tbody);
   
-  // Clear container and add table
-  container.innerHTML = '';
-  container.appendChild(table);
+  // Add to DOM with wrapper
+  responsiveWrapper.appendChild(table);
+  container.appendChild(responsiveWrapper);
+  
+  // Update table info
+  const paginatedStart = (currentPage - 1) * rowsPerPage;
+  const paginatedEnd = Math.min(paginatedStart + rowsPerPage, filteredData.length);
+  updateTableInfo(paginatedStart + 1, paginatedEnd, filteredData.length);
+}
+
+// Update table information display
+function updateTableInfo(start, end, total) {
+  const tableInfoElement = document.getElementById('tableInfoText');
+  if (tableInfoElement) {
+    if (total === 0) {
+      tableInfoElement.textContent = 'No data to display.';
+    } else if (rowsPerPage === -1 || total <= rowsPerPage) { // -1 means "Show All" or total is less than rows per page
+      tableInfoElement.textContent = `Showing all ${total} entries.`;
+    } else {
+      tableInfoElement.textContent = `Showing ${start} to ${Math.min(end, total)} of ${total} entries.`;
+    }
+  } else {
+    console.warn('Element with ID "tableInfoText" not found for updating table info.');
+  }
 }
 
 // Format cell values for display
@@ -1103,6 +1098,174 @@ function handleExportCsv() {
   document.body.removeChild(link);
 }
 
+// Export data to TSV format
+function handleExportTsv() {
+  if (!tableData || tableData.length === 0) {
+    alert("No data to export");
+    return;
+  }
+  
+  // Get all headers (column names)
+  const headers = allColumns;
+  
+  // Create TSV content
+  let tsvContent = headers.join('\t') + '\n';
+  
+  tableData.forEach(row => {
+    const values = headers.map(header => {
+      const value = row[header] !== undefined ? row[header] : '';
+      // For TSV, we only need to escape tabs and newlines
+      return String(value).replace(/\t/g, ' ').replace(/\n/g, ' ');
+    });
+    tsvContent += values.join('\t') + '\n';
+  });
+  
+  // Create and trigger download
+  const blob = new Blob([tsvContent], { type: 'text/tab-separated-values;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `kibana_data_${new Date().toISOString().slice(0,10)}.tsv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// Copy CSV data to clipboard
+function handleCopyCsv() {
+  if (!tableData || tableData.length === 0) {
+    alert("No data to copy");
+    return;
+  }
+  
+  // Get all headers (column names)
+  const headers = allColumns;
+  
+  // Create CSV content
+  let csvContent = headers.join(',') + '\n';
+  
+  tableData.forEach(row => {
+    const values = headers.map(header => {
+      const value = row[header] !== undefined ? row[header] : '';
+      // Escape quotes and wrap in quotes if value contains comma
+      const escaped = String(value).replace(/"/g, '""');
+      return `"${escaped}"`;
+    });
+    csvContent += values.join(',') + '\n';
+  });
+  
+  // Copy to clipboard
+  copyToClipboard(csvContent, 'CSV');
+}
+
+// Copy TSV data to clipboard
+function handleCopyTsv() {
+  if (!tableData || tableData.length === 0) {
+    alert("No data to copy");
+    return;
+  }
+  
+  // Get all headers (column names)
+  const headers = allColumns;
+  
+  // Create TSV content
+  let tsvContent = headers.join('\t') + '\n';
+  
+  tableData.forEach(row => {
+    const values = headers.map(header => {
+      const value = row[header] !== undefined ? row[header] : '';
+      // For TSV, we only need to escape tabs and newlines
+      return String(value).replace(/\t/g, ' ').replace(/\n/g, ' ');
+    });
+    tsvContent += values.join('\t') + '\n';
+  });
+  
+  // Copy to clipboard
+  copyToClipboard(tsvContent, 'TSV');
+}
+
+// Helper function to copy text to clipboard
+function copyToClipboard(text, format) {
+  // Use the modern Clipboard API if available
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        showCopySuccess(format);
+      })
+      .catch(err => {
+        console.error('Failed to copy: ', err);
+        showCopyFallback(text, format);
+      });
+  } else {
+    showCopyFallback(text, format);
+  }
+}
+
+// Fallback approach for copying to clipboard
+function showCopyFallback(text, format) {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';  // Prevent scrolling to bottom
+  document.body.appendChild(textarea);
+  textarea.select();
+  
+  try {
+    const successful = document.execCommand('copy');
+    if (successful) {
+      showCopySuccess(format);
+    } else {
+      console.error('Failed to copy text with execCommand');
+      alert(`Unable to copy ${format} data to clipboard. Your browser may not support this feature.`);
+    }
+  } catch (err) {
+    console.error('Error copying text: ', err);
+    alert(`Error copying ${format} data: ${err}`);
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
+// Show success message after copying
+function showCopySuccess(format) {
+  // Create or reuse a toast notification
+  let toast = document.getElementById('copyToast');
+  
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'copyToast';
+    toast.className = 'position-fixed bottom-0 end-0 p-3';
+    toast.style.zIndex = '5';
+    
+    toast.innerHTML = `
+      <div class="toast show align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+          <div class="toast-body">
+            <i class="bi bi-clipboard-check me-2"></i>
+            <span id="copyToastMessage"></span>
+          </div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(toast);
+  }
+  
+  // Set message
+  document.getElementById('copyToastMessage').textContent = `${format} data copied to clipboard`;
+  
+  // Show toast
+  const toastElement = toast.querySelector('.toast');
+  
+  // Auto-hide after 3 seconds
+  setTimeout(() => {
+    if (toast.parentNode) {
+      document.body.removeChild(toast);
+    }
+  }, 3000);
+}
+
 // Export data to Excel format
 function handleExportExcel() {
   if (!tableData || tableData.length === 0) {
@@ -1185,23 +1348,33 @@ function showLoading(show) {
 
 // Show/hide empty state
 function showEmptyState(show) {
-  const emptyState = document.getElementById('emptyState');
-  const tableContainer = document.getElementById('tableContainer');
+  const container = document.getElementById('tableContainer');
+  if (!container) return;
   
-  if (!emptyState) {
-    // Create empty state if it doesn't exist
-    const newEmptyState = document.createElement('div');
-    newEmptyState.id = 'emptyState';
-    newEmptyState.className = 'alert alert-warning mt-3';
-    newEmptyState.innerHTML = '<p>No data available. Please paste JSON data in the extension popup and click "Parse JSON".</p>';
-    
-    // Insert after table container
-    tableContainer.parentNode.insertBefore(newEmptyState, tableContainer.nextSibling);
+  let emptyState = document.getElementById('emptyState');
+  if (!emptyState && show) {
+    emptyState = document.createElement('div');
+    emptyState.id = 'emptyState';
+    emptyState.className = 'alert alert-info my-3';
+    emptyState.innerHTML = `
+      <h4>No Data Available</h4>
+      <p>No Elasticsearch data has been loaded. Please:</p>
+      <ol>
+        <li>Make sure you've clicked the extension icon on a Kibana results page</li>
+        <li>Click "Extract Data" in the popup</li>
+        <li>Wait for the data extraction to complete</li>
+      </ol>
+      <p>If you're in development mode, you can <a href="#debug">enable debug mode</a> to test with sample data.</p>
+    `;
+    container.parentNode.insertBefore(emptyState, container);
   }
   
-  if (emptyState && tableContainer) {
+  if (emptyState) {
     emptyState.style.display = show ? 'block' : 'none';
-    tableContainer.style.display = show ? 'none' : 'block';
+  }
+  
+  if (container) {
+    container.style.display = show ? 'none' : 'block';
   }
 }
 
@@ -1219,31 +1392,62 @@ function showError(message) {
 
 // Add debug and troubleshooting function
 function addDebugFeatures() {
-  // Add a message at the top of the page if debug mode
+  // Only add if in debug mode
   if (window.location.hash.includes('debug')) {
     const container = document.querySelector('.container-fluid');
     const debugDiv = document.createElement('div');
-    debugDiv.className = 'alert alert-info mb-3';
+    debugDiv.className = 'alert alert-warning mb-3';
     debugDiv.innerHTML = `
-      <strong>Debug Mode Active</strong>
+      <h4>Debug Mode Active</h4>
       <p>Troubleshooting Information:</p>
       <ul>
         <li>Bootstrap loaded: ${typeof bootstrap !== 'undefined' ? 'Yes' : 'No'}</li>
-        <li>Using custom dropdown implementation: ${typeof bootstrap === 'undefined' ? 'Yes' : 'No'}</li>
+        <li>Chrome API available: ${typeof chrome !== 'undefined' && chrome.storage ? 'Yes' : 'No'}</li>
+        <li>User Agent: ${navigator.userAgent}</li>
+        <li>Screen Size: ${window.innerWidth}x${window.innerHeight}</li>
       </ul>
-      <button id="createSampleData" class="btn btn-sm btn-warning">Create Sample Data</button>
+      <div class="d-flex gap-2">
+        <button id="createSampleDataBtn" class="btn btn-sm btn-warning">Create Sample Data</button>
+        <button id="clearDataBtn" class="btn btn-sm btn-danger">Clear All Data</button>
+        <button id="showStorageBtn" class="btn btn-sm btn-info">Show Storage Data</button>
+      </div>
     `;
-    container.insertBefore(debugDiv, container.firstChild);
     
-    // Add event listener for the create sample data button
-    setTimeout(() => {
-      const sampleDataBtn = document.getElementById('createSampleData');
-      if (sampleDataBtn) {
-        sampleDataBtn.addEventListener('click', () => {
-          createSampleData();
+    if (container) {
+      container.insertBefore(debugDiv, container.firstChild);
+      
+      // Add event listeners after a brief delay to ensure DOM is ready
+      setTimeout(() => {
+        document.getElementById('createSampleDataBtn')?.addEventListener('click', createSampleData);
+        
+        document.getElementById('clearDataBtn')?.addEventListener('click', () => {
+          if (confirm('Are you sure you want to clear all stored data?')) {
+            if (typeof chrome !== 'undefined' && chrome.storage) {
+              chrome.storage.local.clear(() => {
+                alert('Storage cleared');
+                window.location.reload();
+              });
+            } else {
+              localStorage.clear();
+              alert('LocalStorage cleared');
+              window.location.reload();
+            }
+          }
         });
-      }
-    }, 500);
+        
+        document.getElementById('showStorageBtn')?.addEventListener('click', () => {
+          if (typeof chrome !== 'undefined' && chrome.storage) {
+            chrome.storage.local.get(null, (data) => {
+              console.log('All storage data:', data);
+              alert('Check console for storage data');
+            });
+          } else {
+            console.log('All localStorage data:', localStorage);
+            alert('Check console for localStorage data');
+          }
+        });
+      }, 100);
+    }
   }
 }
 
@@ -1292,15 +1496,15 @@ function createSampleData() {
   processData();
 }
 
-// Update the getSortIcon function to use cleaner Unicode characters
+// Update the getSortIcon function to use Bootstrap icons
 function getSortIcon(type) {
-  // Always use Unicode characters for better compatibility
+  // Use improved Bootstrap icons for better visual appearance
   switch (type) {
     case 'asc':
-      return '▲'; // Solid up triangle
+      return '<i class="bi bi-sort-up-alt"></i>'; // Bootstrap up arrow icon (improved)
     case 'desc':
-      return '▼'; // Solid down triangle
+      return '<i class="bi bi-sort-down-alt"></i>'; // Bootstrap down arrow icon (improved)
     default:
-      return '⇵'; // Up-down arrow (more compact than the current one)
+      return '<i class="bi bi-arrow-down-up"></i>'; // Bootstrap up-down arrow icon (improved)
   }
 }

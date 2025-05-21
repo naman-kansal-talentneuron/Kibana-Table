@@ -3,12 +3,45 @@
 <head>
   <title>Kibana Data Table</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-  <style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">  <style>
+    :root {
+      /* Light mode variables */
+      --background-color: #f8f9fa;
+      --text-color: #212529;
+      --container-bg: #ffffff;
+      --border-color: #dee2e6;
+      --hover-bg: rgba(0,0,0,0.05);
+      --control-bg: #f8f9fa;
+      --shadow-color: rgba(0,0,0,0.1);
+      --table-header-bg: #f8f9fa;
+      --sorted-column-bg: rgba(13, 110, 253, 0.05);
+      --muted-text: #6c757d;
+      --link-color: #0d6efd;
+    }
+      [data-theme="dark"] {
+      /* Dark mode variables */
+      --background-color: #121212;
+      --text-color: #e0e0e0;
+      --container-bg: #1e1e1e;
+      --border-color: #444;
+      --hover-bg: rgba(255,255,255,0.08);
+      --control-bg: #2d2d2d;
+      --shadow-color: rgba(0,0,0,0.3);
+      --table-header-bg: #2d2d2d;
+      --table-row-bg: #262626;
+      --table-row-alt-bg: #2e2e2e;
+      --table-row-border: #444;
+      --sorted-column-bg: rgba(13, 110, 253, 0.15);
+      --muted-text: #adb5bd;
+      --link-color: #6ea8fe;
+    }
+    
     body {
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       padding: 20px;
-      background-color: #f8f9fa;
+      background-color: var(--background-color);
+      color: var(--text-color);
+      transition: background-color 0.3s ease, color 0.3s ease;
     }
     
     .header {
@@ -17,19 +50,20 @@
       align-items: center;
       margin-bottom: 20px;
     }
-    
-    .main-container {
-      background-color: #fff;
+      .main-container {
+      background-color: var(--container-bg);
       border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 6px var(--shadow-color);
       padding: 20px;
+      transition: background-color 0.3s ease, box-shadow 0.3s ease;
     }
     
     .controls {
-      background-color: #f8f9fa;
+      background-color: var(--control-bg);
       border-radius: 8px;
       padding: 15px;
       margin-bottom: 20px;
+      transition: background-color 0.3s ease;
     }
     
     .table-container {
@@ -42,13 +76,13 @@
       margin-bottom: 0;
       width: 100%;
     }
-    
-    .table th {
+      .table th {
       position: sticky;
       top: 0;
-      background-color: #f8f9fa;
+      background-color: var(--table-header-bg);
       z-index: 5;
       cursor: pointer;
+      transition: background-color 0.3s ease;
       white-space: nowrap;
       user-select: none;
     }
@@ -157,21 +191,21 @@
     .table th {
       font-weight: bold;
       background-color: #f8f9fa;    }
-    
-    table.table thead th {
-      background-color: #f8f9fa;
-      border-bottom: 2px solid #dee2e6;
+      table.table thead th {
+      background-color: var(--table-header-bg);
+      border-bottom: 2px solid var(--border-color);
       position: relative;
       padding-right: 25px; /* Make space for sort indicator */
+      transition: background-color 0.3s ease, border-color 0.3s ease;
     }
     
     /* Highlight sorted column */
     table.table th.sorted {
-      background-color: rgba(13, 110, 253, 0.05);
+      background-color: var(--sorted-column-bg);
     }
     
     .table-hover tbody tr:hover {
-      background-color: rgba(0,0,0,0.05);
+      background-color: var(--hover-bg);
     }
     
     .alert {
@@ -231,11 +265,324 @@
     }
     
     .table-hover tbody tr:hover {
+    }
+
+    /* Theme toggle switch styles */
+    .theme-toggle {
+      display: flex;
+      align-items: center;
+      margin-left: 15px;
+    }
+    
+    .theme-toggle-label {
+      display: inline-block;
+      cursor: pointer;
+      margin-left: 8px;
+      font-size: 0.875rem;
+      color: var(--muted-text);
+    }
+    
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 24px;
+    }
+    
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .3s;
+      border-radius: 24px;
+    }
+    
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    
+    input:checked + .slider {
+      background-color: #0d6efd;
+    }
+    
+    input:focus + .slider {
+      box-shadow: 0 0 1px #0d6efd;
+    }
+    
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+    
+    .slider .icons {
+      display: flex;
+      justify-content: space-between;
+      padding: 0 5px;
+      line-height: 24px;
+    }
+    
+    .slider .icons i {
+      color: white;
+      font-size: 0.75rem;
+    }
+    
+    /* Update alert and other colored elements */
+    [data-theme="dark"] .alert-info {
+      background-color: #204263;
+      color: #9ec5fe;
+      border-color: #2b4a63;
+    }
+    
+    [data-theme="dark"] .alert-danger {
+      background-color: #453232;
+      color: #f8d7da;
+      border-color: #622525;
+    }
+    
+    [data-theme="dark"] .btn-outline-primary {
+      color: #6ea8fe;
+      border-color: #6ea8fe;
+    }
+    
+    [data-theme="dark"] .btn-outline-primary:hover {
+      background-color: #0d6efd;
+      color: white;
+    }
+    
+    [data-theme="dark"] .btn-outline-secondary {
+      color: #a7acb1;
+      border-color: #a7acb1;
+    }
+    
+    [data-theme="dark"] .sort-indicator {
+      opacity: 0.7;
+    }
+    
+    [data-theme="dark"] .sort-indicator.text-primary {
+      color: #6ea8fe !important;
+      opacity: 1;
+    }
+    
+    [data-theme="dark"] .dropdown-menu {
+      background-color: #2d2d2d;
+      border-color: #444;
+    }
+    
+    [data-theme="dark"] .dropdown-item {
+      color: #e0e0e0;
+    }
+    
+    [data-theme="dark"] .dropdown-item:hover {
+      background-color: #444;
+    }
+    
+    [data-theme="dark"] .form-check-label {
+      color: #e0e0e0;
+    }    /* Theme toggle switch styles */
+    .theme-toggle {
+      display: flex;
+      align-items: center;
+      margin-left: 15px;
+    }
+    
+    .theme-toggle-label {
+      display: inline-block;
+      cursor: pointer;
+      margin-left: 8px;
+      font-size: 0.875rem;
+      color: var(--muted-text);
+    }
+    
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 24px;
+    }
+    
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .3s;
+      border-radius: 24px;
+    }
+    
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    
+    input:checked + .slider {
+      background-color: #0d6efd;
+    }
+    
+    input:focus + .slider {
+      box-shadow: 0 0 1px #0d6efd;
+    }
+    
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+    
+    .slider .icons {
+      display: flex;
+      justify-content: space-between;
+      padding: 0 5px;
+      line-height: 24px;
+    }
+    
+    .slider .icons i {
+      color: white;
+      font-size: 0.75rem;
+    }
+    
+    /* Update alert and other colored elements */
+    [data-theme="dark"] .alert-info {
+      background-color: #204263;
+      color: #9ec5fe;
+      border-color: #2b4a63;
+    }
+    
+    [data-theme="dark"] .alert-danger {
+      background-color: #453232;
+      color: #f8d7da;
+      border-color: #622525;
+    }
+    
+    [data-theme="dark"] .btn-outline-primary {
+      color: #6ea8fe;
+      border-color: #6ea8fe;
+    }
+    
+    [data-theme="dark"] .btn-outline-primary:hover {
+      background-color: #0d6efd;
+      color: white;
+    }
+    
+    [data-theme="dark"] .btn-outline-secondary {
+      color: #a7acb1;
+      border-color: #a7acb1;
+    }
+    
+    [data-theme="dark"] .sort-indicator {
+      opacity: 0.7;
+    }
+    
+    [data-theme="dark"] .sort-indicator.text-primary {
+      color: #6ea8fe !important;
+      opacity: 1;
+    }
+    
+    [data-theme="dark"] .dropdown-menu {
+      background-color: #2d2d2d;
+      border-color: #444;
+    }
+    
+    [data-theme="dark"] .dropdown-item {
+      color: #e0e0e0;
+    }
+    
+    [data-theme="dark"] .dropdown-item:hover {
+      background-color: #444;
+    }
+    
+    [data-theme="dark"] .form-check-label {
+      color: #e0e0e0;
+    }
+    
+    /* Table styling for dark mode */
+    [data-theme="dark"] .table {
+      color: #e0e0e0;
+      border-color: var(--table-row-border);
+    }
+    
+    [data-theme="dark"] .table > :not(caption) > * > * {
+      color: #e0e0e0;
+      background-color: var(--table-row-bg);
+      border-bottom-color: var(--table-row-border);
+    }
+    
+    [data-theme="dark"] .table tbody tr:nth-of-type(odd) > * {
+      background-color: var(--table-row-alt-bg);
+    }
+    
+    [data-theme="dark"] .table-hover tbody tr:hover > * {
+      background-color: var(--hover-bg);
+      color: #ffffff;
+    }
+    
+    [data-theme="dark"] th:hover {
+      background-color: #3d3d3d !important;
+    }
+    
+    [data-theme="dark"] .pagination .page-link {
+      background-color: var(--table-row-bg);
+      border-color: var(--table-row-border);
+      color: var(--text-color);
+    }
+    
+    [data-theme="dark"] .pagination .page-item.active .page-link {
+      background-color: #0d6efd;
+      border-color: #0d6efd;
+      color: white;
+    }
+    
+    [data-theme="dark"] .text-muted {
+      color: #adb5bd !important;
+    }
   </style>
 </head>
 <body>  <div class="container-fluid">
     <div class="header">
-      <h2><i class="bi bi-table me-2"></i>Kibana Data Table</h2>      <div>
+      <h2><i class="bi bi-table me-2"></i>Kibana Data Table</h2>      <div class="d-flex align-items-center">
+        <!-- Theme Toggle Switch -->
+        <div class="theme-toggle me-3">
+          <label class="switch">
+            <input type="checkbox" id="themeToggle" checked>
+            <span class="slider">
+              <div class="icons">
+                <i class="bi bi-moon-fill"></i>
+                <i class="bi bi-sun-fill"></i>
+              </div>
+            </span>
+          </label>
+        </div>
+        
         <div class="btn-group me-2">
           <button id="exportCsvBtn" class="btn btn-outline-primary">
             <i class="bi bi-filetype-csv me-1"></i>Export CSV

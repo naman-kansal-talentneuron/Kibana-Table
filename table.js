@@ -8,6 +8,7 @@ let sortColumn = '';
 let sortDirection = 'asc';
 let visibleColumns = new Set();
 let allColumns = [];
+let currentTheme = 'dark'; // Default theme is dark
 
 // Initialize when the page loads
 document.addEventListener('DOMContentLoaded', function() {
@@ -23,9 +24,14 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('copyCsvBtn').addEventListener('click', handleCopyCsv);
   document.getElementById('exportTsvBtn').addEventListener('click', handleExportTsv);
   document.getElementById('copyTsvBtn').addEventListener('click', handleCopyTsv);
-  document.getElementById('exportExcelBtn').addEventListener('click', handleExportExcel);
-  document.getElementById('selectAllColumns').addEventListener('click', selectAllColumns);
+  document.getElementById('exportExcelBtn').addEventListener('click', handleExportExcel);  document.getElementById('selectAllColumns').addEventListener('click', selectAllColumns);
   document.getElementById('deselectAllColumns').addEventListener('click', deselectAllColumns);
+  
+  // Setup theme toggle
+  document.getElementById('themeToggle').addEventListener('change', handleThemeToggle);
+  
+  // Initialize theme from saved preference or default to dark
+  initializeTheme();
   
   // Add debug features
   addDebugFeatures();
@@ -1506,5 +1512,89 @@ function getSortIcon(type) {
       return '<i class="bi bi-sort-down-alt"></i>'; // Bootstrap down arrow icon (improved)
     default:
       return '<i class="bi bi-arrow-down-up"></i>'; // Bootstrap up-down arrow icon (improved)
+  }
+}
+
+// Initialize theme based on saved preference or default to dark mode
+function initializeTheme() {
+  // Try to get saved preference or default to dark mode
+  let savedTheme;
+  
+  // Check for Chrome storage first
+  if (typeof chrome !== 'undefined' && chrome.storage) {
+    chrome.storage.local.get(['theme'], function(result) {
+      savedTheme = result.theme || 'dark';
+      applyTheme(savedTheme);
+      
+      // Update toggle switch state
+      const themeToggle = document.getElementById('themeToggle');
+      if (themeToggle) {
+        themeToggle.checked = savedTheme === 'dark';
+      }
+    });
+  } else {
+    // Fall back to localStorage
+    try {
+      savedTheme = localStorage.getItem('kibanaTableTheme') || 'dark';
+      applyTheme(savedTheme);
+      
+      // Update toggle switch state
+      const themeToggle = document.getElementById('themeToggle');
+      if (themeToggle) {
+        themeToggle.checked = savedTheme === 'dark';
+      }
+    } catch (e) {
+      console.warn("Could not access localStorage:", e);
+      applyTheme('dark'); // Default to dark mode
+    }
+  }
+}
+
+// Handler for theme toggle
+function handleThemeToggle(e) {
+  const isDarkMode = e.target.checked;
+  const newTheme = isDarkMode ? 'dark' : 'light';
+  
+  // Save preference and apply theme
+  saveThemePreference(newTheme);
+  applyTheme(newTheme);
+}
+
+// Save theme preference to storage
+function saveThemePreference(theme) {
+  currentTheme = theme;
+  
+  // Try to save in Chrome storage first
+  if (typeof chrome !== 'undefined' && chrome.storage) {
+    chrome.storage.local.set({ theme: theme });
+  } else {
+    // Fall back to localStorage
+    try {
+      localStorage.setItem('kibanaTableTheme', theme);
+    } catch (e) {
+      console.warn("Could not save theme to localStorage:", e);
+    }
+  }
+}
+
+// Apply theme to document
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  currentTheme = theme;
+  
+  // Force re-render the table if it exists
+  if (tableData && tableData.length > 0) {
+    renderTable();
+    renderPagination();
+  }
+  
+  // Apply theme-specific classes to specific elements
+  const tableContainer = document.querySelector('.table-container');
+  if (tableContainer) {
+    if (theme === 'dark') {
+      tableContainer.classList.add('table-dark');
+    } else {
+      tableContainer.classList.remove('table-dark');
+    }
   }
 }

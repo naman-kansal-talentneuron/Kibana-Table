@@ -1070,8 +1070,8 @@ function handleExportCsv() {
     return;
   }
   
-  // Get all headers (column names)
-  const headers = allColumns;
+  // Get only visible columns (as selected in the toggle columns section)
+  const headers = Array.from(visibleColumns);
   
   // Create CSV content
   let csvContent = headers.join(',') + '\n';
@@ -1105,8 +1105,8 @@ function handleExportTsv() {
     return;
   }
   
-  // Get all headers (column names)
-  const headers = allColumns;
+  // Get only visible columns (as selected in the toggle columns section)
+  const headers = Array.from(visibleColumns);
   
   // Create TSV content
   let tsvContent = headers.join('\t') + '\n';
@@ -1139,8 +1139,8 @@ function handleCopyCsv() {
     return;
   }
   
-  // Get all headers (column names)
-  const headers = allColumns;
+  // Get only visible columns (as selected in the toggle columns section)
+  const headers = Array.from(visibleColumns);
   
   // Create CSV content
   let csvContent = headers.join(',') + '\n';
@@ -1166,8 +1166,8 @@ function handleCopyTsv() {
     return;
   }
   
-  // Get all headers (column names)
-  const headers = allColumns;
+  // Get only visible columns (as selected in the toggle columns section)
+  const headers = Array.from(visibleColumns);
   
   // Create TSV content
   let tsvContent = headers.join('\t') + '\n';
@@ -1273,8 +1273,8 @@ function handleExportExcel() {
     return;
   }
   
-  // Get all headers (column names)
-  const headers = allColumns;
+  // Get only visible columns (as selected in the toggle columns section)
+  const headers = Array.from(visibleColumns);
   
   // Create CSV content with UTF-8 BOM for Excel
   let csvContent = '\ufeff' + headers.join(',') + '\n';

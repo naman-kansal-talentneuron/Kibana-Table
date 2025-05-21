@@ -589,13 +589,36 @@ function identifyColumns() {
 function createColumnToggleUI() {
   const container = document.getElementById('columnToggle');
   
-  // Clear previous content except the buttons at the bottom
-  const buttonsDiv = container.querySelector('.d-grid');
+  // Store any existing buttons
+  const existingButtons = container.querySelector('.d-flex');
   container.innerHTML = '';
+  
+  // Create buttons at the top and side by side
+  const buttonsDiv = document.createElement('div');
+  buttonsDiv.className = 'd-flex gap-2 mb-2';
+  
+  const selectAllBtn = document.createElement('button');
+  selectAllBtn.className = 'btn btn-sm btn-outline-primary flex-grow-1';
+  selectAllBtn.id = 'selectAllColumns';
+  selectAllBtn.textContent = 'Select All';
+  selectAllBtn.type = 'button';
+  selectAllBtn.addEventListener('click', selectAllColumns);
+  
+  const deselectAllBtn = document.createElement('button');
+  deselectAllBtn.className = 'btn btn-sm btn-outline-secondary flex-grow-1';
+  deselectAllBtn.id = 'deselectAllColumns';
+  deselectAllBtn.textContent = 'Deselect All';
+  deselectAllBtn.type = 'button';
+  deselectAllBtn.addEventListener('click', deselectAllColumns);
+  
+  buttonsDiv.appendChild(selectAllBtn);
+  buttonsDiv.appendChild(deselectAllBtn);
+  
+  // Add buttons to container first
+  container.appendChild(buttonsDiv);
   
   // Create a wrapper for the checkboxes
   const checkboxesDiv = document.createElement('div');
-  checkboxesDiv.className = 'mb-2';
   checkboxesDiv.style.maxHeight = '250px';
   checkboxesDiv.style.overflowY = 'auto';
   
@@ -621,36 +644,8 @@ function createColumnToggleUI() {
     div.appendChild(label);
     checkboxesDiv.appendChild(div);
   });
-  
-  // Add the checkboxes to the container
+    // Add the checkboxes to the container after the buttons
   container.appendChild(checkboxesDiv);
-  
-  // Re-add the buttons
-  if (buttonsDiv) {
-    container.appendChild(buttonsDiv);
-  } else {
-    // If buttons div doesn't exist, recreate it
-    const newButtonsDiv = document.createElement('div');
-    newButtonsDiv.className = 'd-grid gap-2 mt-2';
-    
-    const selectAllBtn = document.createElement('button');
-    selectAllBtn.className = 'btn btn-sm btn-outline-primary';
-    selectAllBtn.id = 'selectAllColumns';
-    selectAllBtn.textContent = 'Select All';
-    selectAllBtn.type = 'button';
-    selectAllBtn.addEventListener('click', selectAllColumns);
-    
-    const deselectAllBtn = document.createElement('button');
-    deselectAllBtn.className = 'btn btn-sm btn-outline-secondary';
-    deselectAllBtn.id = 'deselectAllColumns';
-    deselectAllBtn.textContent = 'Deselect All';
-    deselectAllBtn.type = 'button';
-    deselectAllBtn.addEventListener('click', deselectAllColumns);
-    
-    newButtonsDiv.appendChild(selectAllBtn);
-    newButtonsDiv.appendChild(deselectAllBtn);
-    container.appendChild(newButtonsDiv);
-  }
 }
 
 // Event handler for column visibility toggle

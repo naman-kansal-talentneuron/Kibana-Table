@@ -1289,12 +1289,12 @@ function handleExportExcel() {
     csvContent += values.join(',') + '\n';
   });
   
-  // Create and trigger download
+  // Create and trigger download - use .csv extension for correct Excel handling
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.setAttribute('href', url);
-  link.setAttribute('download', `kibana_data_${new Date().toISOString().slice(0,10)}.xlsx`);
+  link.setAttribute('download', `kibana_data_${new Date().toISOString().slice(0,10)}.csv`);
   link.style.visibility = 'hidden';
   document.body.appendChild(link);
   link.click();
